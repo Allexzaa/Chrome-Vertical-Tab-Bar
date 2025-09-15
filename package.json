@@ -1,0 +1,24 @@
+{
+  "name": "chrome-vertical-tab-bar",
+  "version": "1.0.0",
+  "description": "A vertical toolbar app for Windows, mimicking Chrome's tab bar",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json && cp src/renderer/index.html dist/renderer/",
+    "watch": "tsc -w",
+    "dev": "npm run build && npm run start",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "@types/sortablejs": "^1.15.4",
+    "electron": "^26.2.2",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "sortablejs": "^1.15.0"
+  }
+}

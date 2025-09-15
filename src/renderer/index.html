@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' https://www.google.com data: https:; connect-src 'self'">
+    <title>Vertical Tab Bar</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+        }
+
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg-color);
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            width: 90px;
+            height: 100%;
+            overflow: hidden;
+            user-select: none;
+            cursor: default;
+            background: var(--bg-color);
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        .container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            box-sizing: border-box;
+            will-change: width;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        #app-root {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 90px;
+            height: 100%;
+            background: var(--bg-color);
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .container::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 4px;
+            height: 100%;
+            cursor: ew-resize;
+            z-index: 9999;
+        }
+
+        .container:hover::after {
+            background: rgba(150, 150, 150, 0.3);
+        }
+
+        #tab-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            padding: 3px;
+            box-sizing: border-box;
+            user-select: none;
+            position: relative;
+            overflow-y: auto;
+            overflow-x: hidden;
+            touch-action: none;  /* Prevent scrolling while dragging on touch devices */
+            background: var(--bg-color);
+            z-index: 2;
+            gap: 3px;
+        }
+
+        #tab-container::-webkit-scrollbar {
+            width: 0px;  /* Hide scrollbar but keep functionality */
+        }
+
+        #tab-container::before {
+            content: 'Drop URLs here';
+            color: #999;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            padding: 10px;
+            text-align: center;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        #tab-container.drag-over {
+            background-color: #f0f0f0;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        .tab {
+            width: 42px;
+            height: 42px;
+            margin: 0;
+            background: #f0f0f0;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #d0d0d0;
+            transform: none;
+            opacity: 1;
+            pointer-events: auto;
+            z-index: auto;
+            flex-shrink: 0;
+        }
+
+        .tab:hover {
+            background: #e0e0e0;
+            transform: scale(1.05);
+        }
+
+        .tab img {
+            width: 24px;
+            height: 24px;
+        }
+
+        .tab.pinned {
+            width: 42px;
+            height: 42px;
+            background: #e8e8e8;
+        }
+
+        .tab.pinned img {
+            width: 24px;
+            height: 24px;
+        }
+
+        .pin-button {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 10px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 3px;
+            padding: 2px;
+            cursor: pointer;
+        }
+
+        .tab:hover .pin-button {
+            opacity: 1;
+        }
+
+        .sortable-ghost {
+            opacity: 0.3;
+            background-color: var(--bg-color) !important;
+            outline: 2px solid #ccc;
+            position: relative;
+            z-index: 2;
+        }
+
+        .sortable-drag {
+            background: #f0f0f0 !important;
+            cursor: grabbing !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transform-origin: center center;
+            opacity: 0.9;
+            position: fixed !important;
+            z-index: 1000 !important;
+            pointer-events: none;
+        }
+
+        .sortable-fallback {
+            background: #f0f0f0 !important;
+            cursor: grabbing !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transform-origin: center center;
+            opacity: 0.9;
+            pointer-events: none;
+            position: fixed !important;
+            z-index: 1000 !important;
+        }
+
+        /* Ensure consistent background during dragging */
+        body.dragging {
+            background: var(--bg-color) !important;
+        }
+
+        /* Drag handle for moving the window */
+        .drag-handle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            background: rgba(200, 200, 200, 0.3);
+            cursor: move;
+            -webkit-app-region: drag;
+            z-index: 10;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .drag-handle:hover {
+            background: rgba(200, 200, 200, 0.5);
+        }
+
+        /* Adjust tab container to account for drag handle */
+        #tab-container {
+            margin-top: 20px;
+            height: calc(100% - 20px);
+        }
+    </style>
+</head>
+<body>
+    <div id="app-root">
+        <div class="container">
+            <div class="drag-handle"></div>
+            <div id="tab-container">
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script type="module" src="renderer.js"></script>
+</body>
+</html>

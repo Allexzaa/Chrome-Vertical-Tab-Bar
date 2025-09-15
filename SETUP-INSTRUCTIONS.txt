@@ -1,0 +1,48 @@
+CHROME VERTICAL TAB BAR - SETUP INSTRUCTIONS
+============================================
+
+1. DESKTOP SHORTCUT (NO COMMAND WINDOW):
+   - Right-click on "start-tab-bar-silent.vbs" in this folder
+   - Select "Send to" > "Desktop (create shortcut)"
+   - This will run the app silently without showing a command window
+
+   Alternative (shows command window):
+   - Right-click on "start-tab-bar.bat" in this folder
+   - Select "Send to" > "Desktop (create shortcut)"
+
+2. AUTO-START ON WINDOWS BOOT (Optional):
+   Method 1 - Startup folder (silent):
+   - Press Windows + R, type "shell:startup" and press Enter
+   - Copy the "start-tab-bar-silent.vbs" file to this startup folder
+
+   Method 1b - Startup folder (with command window):
+   - Press Windows + R, type "shell:startup" and press Enter
+   - Copy the "start-tab-bar.bat" file to this startup folder
+
+   Method 2 - Task Scheduler (more reliable, silent):
+   - Press Windows + R, type "taskschd.msc" and press Enter
+   - Click "Create Basic Task" in the right panel
+   - Name: "Chrome Vertical Tab Bar"
+   - Trigger: "When the computer starts"
+   - Action: "Start a program"
+   - Program: Browse to "start-tab-bar-silent.vbs" in this folder
+   - Check "Run with highest privileges"
+
+3. MANUAL START:
+   - Double-click the desktop shortcut or the "start-tab-bar-silent.vbs" file (no command window)
+   - Or double-click "start-tab-bar.bat" file (shows command window)
+   - The app will build and start automatically
+
+4. TO STOP THE APP:
+   - Close the app window or use the system tray icon
+   - If using the .bat file, also close the command prompt window
+
+FILES INCLUDED:
+- start-tab-bar.bat: Runs the app with visible command window
+- start-tab-bar-silent.vbs: Runs the app silently (recommended)
+
+NOTES:
+- Make sure Node.js is installed on your system
+- The first run might take a moment to build the application
+- The app will appear in your system tray when running
+- Use the .vbs file for silent operation (no command window)
