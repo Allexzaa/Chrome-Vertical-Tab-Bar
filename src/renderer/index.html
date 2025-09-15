@@ -7,6 +7,28 @@
     <style>
         :root {
             --bg-color: #ffffff;
+            --text-color: #333333;
+            --tab-bg: #f0f0f0;
+            --tab-hover: #e0e0e0;
+            --tab-pinned: #e8e8e8;
+            --border-color: #d0d0d0;
+            --drag-handle: rgba(200, 200, 200, 0.3);
+            --drag-handle-hover: rgba(200, 200, 200, 0.5);
+            --placeholder-color: #999999;
+            --drag-over-bg: #f0f0f0;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #2e2e2e;
+            --text-color: #ffffff;
+            --tab-bg: #404040;
+            --tab-hover: #505050;
+            --tab-pinned: #383838;
+            --border-color: #555555;
+            --drag-handle: rgba(100, 100, 100, 0.4);
+            --drag-handle-hover: rgba(100, 100, 100, 0.6);
+            --placeholder-color: #cccccc;
+            --drag-over-bg: #404040;
         }
 
         html {
@@ -96,7 +118,7 @@
 
         #tab-container::before {
             content: 'Drop URLs here';
-            color: #999;
+            color: var(--placeholder-color);
             font-family: Arial, sans-serif;
             font-size: 12px;
             padding: 10px;
@@ -111,7 +133,7 @@
         }
 
         #tab-container.drag-over {
-            background-color: #f0f0f0;
+            background-color: var(--drag-over-bg);
             box-shadow: 0 0 10px rgba(0,0,0,0.2);
         }
 
@@ -119,7 +141,7 @@
             width: 42px;
             height: 42px;
             margin: 0;
-            background: #f0f0f0;
+            background: var(--tab-bg);
             border-radius: 6px;
             display: flex;
             flex-direction: column;
@@ -128,7 +150,7 @@
             position: relative;
             cursor: pointer;
             transition: all 0.3s ease;
-            border: 1px solid #d0d0d0;
+            border: 1px solid var(--border-color);
             transform: none;
             opacity: 1;
             pointer-events: auto;
@@ -137,7 +159,7 @@
         }
 
         .tab:hover {
-            background: #e0e0e0;
+            background: var(--tab-hover);
             transform: scale(1.05);
         }
 
@@ -149,7 +171,7 @@
         .tab.pinned {
             width: 42px;
             height: 42px;
-            background: #e8e8e8;
+            background: var(--tab-pinned);
         }
 
         .tab.pinned img {
@@ -214,17 +236,38 @@
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
+            width: calc(100% - 25px);
             height: 20px;
-            background: rgba(200, 200, 200, 0.3);
+            background: var(--drag-handle);
             cursor: move;
             -webkit-app-region: drag;
             z-index: 10;
-            border-bottom: 1px solid #e0e0e0;
+            border-bottom: 1px solid var(--border-color);
         }
 
         .drag-handle:hover {
-            background: rgba(200, 200, 200, 0.5);
+            background: var(--drag-handle-hover);
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 20px;
+            height: 16px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 11;
+            -webkit-app-region: no-drag;
+            color: var(--text-color);
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            opacity: 1;
         }
 
         /* Adjust tab container to account for drag handle */
@@ -237,7 +280,9 @@
 <body>
     <div id="app-root">
         <div class="container">
-            <div class="drag-handle"></div>
+            <div class="drag-handle">
+                <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode">🌙</button>
+            </div>
             <div id="tab-container">
             </div>
         </div>

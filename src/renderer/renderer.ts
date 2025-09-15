@@ -39,12 +39,12 @@ let tabContainer: HTMLElement | null = null;
 // Function to force reset styles and prevent stuck background colors
 function forceResetStyles() {
     requestAnimationFrame(() => {
-        document.body.style.background = '#ffffff';
+        document.body.style.background = 'var(--bg-color)';
         const container = document.querySelector('.container') as HTMLElement;
         const appRoot = document.getElementById('app-root');
-        if (container) container.style.background = '#ffffff';
-        if (appRoot) appRoot.style.background = '#ffffff';
-        if (tabContainer) tabContainer.style.background = '#ffffff';
+        if (container) container.style.background = 'var(--bg-color)';
+        if (appRoot) appRoot.style.background = 'var(--bg-color)';
+        if (tabContainer) tabContainer.style.background = 'var(--bg-color)';
 
         // Clean up any remaining drag artifacts on all tabs
         const allTabs = document.querySelectorAll('.tab');
@@ -197,12 +197,12 @@ function initializeResize(container: HTMLElement) {
     requestAnimationFrame(() => {
         if (appRoot) {
             appRoot.style.width = `${currentWidth}px`;
-            appRoot.style.background = '#ffffff';
+            appRoot.style.background = 'var(--bg-color)';
         }
         container.style.width = '100%';
-        container.style.background = '#ffffff';
+        container.style.background = 'var(--bg-color)';
         document.body.style.width = `${currentWidth}px`;
-        document.body.style.background = '#ffffff';
+        document.body.style.background = 'var(--bg-color)';
     });
 
     function setWidth(width: number) {
@@ -220,9 +220,9 @@ function initializeResize(container: HTMLElement) {
             document.body.style.width = `${boundedWidth}px`;
 
             // Ensure consistent background
-            document.body.style.background = '#ffffff';
-            container.style.background = '#ffffff';
-            if (appRoot) appRoot.style.background = '#ffffff';
+            document.body.style.background = 'var(--bg-color)';
+            container.style.background = 'var(--bg-color)';
+            if (appRoot) appRoot.style.background = 'var(--bg-color)';
 
             // Update window size
             window.electronAPI.resizeWindow(boundedWidth);
@@ -614,10 +614,63 @@ if (window.electronAPI && window.electronAPI.onRemoveTab) {
 }
 
 
+// Theme management
+class ThemeManager {
+    private currentTheme: 'light' | 'dark' = 'light';
+
+    constructor() {
+        this.loadTheme();
+        this.setupThemeToggle();
+    }
+
+    private loadTheme(): void {
+        const savedTheme = localStorage.getItem('app-theme') as 'light' | 'dark' | null;
+        this.currentTheme = savedTheme || 'light';
+        this.applyTheme();
+    }
+
+    private applyTheme(): void {
+        document.documentElement.setAttribute('data-theme', this.currentTheme);
+        const themeButton = document.getElementById('theme-toggle');
+        if (themeButton) {
+            themeButton.textContent = this.currentTheme === 'light' ? '🌙' : '☀️';
+            themeButton.title = `Switch to ${this.currentTheme === 'light' ? 'dark' : 'light'} mode`;
+        }
+    }
+
+    private setupThemeToggle(): void {
+        const themeButton = document.getElementById('theme-toggle');
+        if (themeButton) {
+            themeButton.addEventListener('click', () => {
+                this.toggleTheme();
+            });
+        }
+    }
+
+    private toggleTheme(): void {
+        this.currentTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+        this.applyTheme();
+        this.saveTheme();
+    }
+
+    private saveTheme(): void {
+        localStorage.setItem('app-theme', this.currentTheme);
+    }
+}
+
+// Initialize theme manager after DOM is ready
+function initializeTheme() {
+    new ThemeManager();
+}
+
 // Wait for DOM to be ready
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeApp);
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeApp();
+        initializeTheme();
+    });
 } else {
     // DOM is already loaded
     initializeApp();
+    initializeTheme();
 }
