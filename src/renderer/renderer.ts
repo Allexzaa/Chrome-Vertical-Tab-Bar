@@ -324,6 +324,35 @@ function initializeApp() {
 let isResizing = false;
 let currentWidth = 90; // Default width for two columns with smaller tabs
 
+// Global setWidth function for maximize button
+function setWidthGlobal(width: number) {
+    const boundedWidth = Math.max(90, Math.min(300, width));
+    currentWidth = boundedWidth;
+
+    // Get all elements that need width update
+    const appRoot = document.getElementById('app-root');
+    const container = document.querySelector('.container') as HTMLElement;
+
+    // Update all elements atomically
+    requestAnimationFrame(() => {
+        // Set widths on all layers
+        if (appRoot) appRoot.style.width = `${boundedWidth}px`;
+        if (container) container.style.width = '100%';
+        document.body.style.width = `${boundedWidth}px`;
+
+        // Ensure consistent background
+        document.body.style.background = 'var(--bg-color)';
+        if (container) container.style.background = 'var(--bg-color)';
+        if (appRoot) appRoot.style.background = 'var(--bg-color)';
+
+        // Update window size
+        window.electronAPI.resizeWindow(boundedWidth);
+    });
+
+    // Store the width
+    localStorage.setItem('tabBarWidth', boundedWidth.toString());
+}
+
 function initializeResize(container: HTMLElement) {
     if (!container) return;
 
@@ -431,6 +460,27 @@ function initializeResize(container: HTMLElement) {
         if (!isResizing) {
             container.style.cursor = 'default';
         }
+    });
+
+    // Listen for window resize events from main process
+    window.electronAPI.onWindowResized((width: number) => {
+        currentWidth = width;
+        
+        // Update DOM elements to match the new width
+        const appRoot = document.getElementById('app-root');
+        requestAnimationFrame(() => {
+            if (appRoot) appRoot.style.width = `${width}px`;
+            container.style.width = '100%';
+            document.body.style.width = `${width}px`;
+            
+            // Ensure consistent background
+            document.body.style.background = 'var(--bg-color)';
+            container.style.background = 'var(--bg-color)';
+            if (appRoot) appRoot.style.background = 'var(--bg-color)';
+        });
+        
+        // Store the width
+        localStorage.setItem('tabBarWidth', width.toString());
     });
 
     // Update window size to match current width
@@ -1585,7 +1635,8 @@ function initializeWindowControls() {
 
     if (maximizeBtn) {
         maximizeBtn.addEventListener('click', () => {
-            window.electronAPI.maximizeWindow();
+            // Custom maximize to 300px width instead of full screen
+            setWidthGlobal(300);
         });
     }
 
