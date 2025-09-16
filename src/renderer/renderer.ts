@@ -43,6 +43,22 @@ let sections: string[] = [];
 let currentDraggedTabId: string | null = null;
 let globalIsCurrentlyDragging = false;
 
+// Section colors data structure
+interface SectionColors {
+    [sectionName: string]: string;
+}
+
+let sectionColors: SectionColors = {};
+
+// Available color options with good contrast for both light and dark themes (1 shade darker)
+const colorOptions = [
+    { name: 'Blue', light: '#3b82f6', dark: '#60a5fa' },
+    { name: 'Green', light: '#22c55e', dark: '#4ade80' },
+    { name: 'Red', light: '#ef4444', dark: '#f87171' },
+    { name: 'Purple', light: '#a855f7', dark: '#c084fc' },
+    { name: 'Orange', light: '#f97316', dark: '#fb923c' }
+];
+
 // Improved function to force reset styles and prevent stuck states
 function forceResetStyles() {
     requestAnimationFrame(() => {
@@ -496,6 +512,13 @@ function renderSectionHeader(sectionName: string, isEmpty: boolean = false) {
     headerElement.dataset.section = sectionName;
     headerElement.draggable = true; // Make section headers draggable
 
+    // Apply section color if available
+    const sectionColor = getSectionColor(sectionName);
+    if (sectionColor && sectionColor !== 'transparent') {
+        headerElement.style.backgroundColor = sectionColor;
+        headerElement.style.color = 'white'; // Ensure text is readable on colored background
+    }
+
     // Add empty section styling if it has no tabs
     if (isEmpty) {
         headerElement.classList.add('empty-section');
@@ -625,6 +648,181 @@ function renderSectionHeader(sectionName: string, isEmpty: boolean = false) {
         user-select: none;
     `;
     headerElement.appendChild(dragHandle);
+
+    // Add color circle next to drag handle
+    const colorCircle = document.createElement('div');
+    colorCircle.className = 'section-color-circle';
+    colorCircle.title = 'Click to change section color';
+    const currentColor = getSectionColor(sectionName);
+    colorCircle.style.cssText = `
+        position: absolute;
+        left: 18px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: ${currentColor || 'transparent'};
+        border: 1px solid var(--border-color);
+        cursor: pointer;
+        z-index: 1000;
+        transition: all 0.2s ease;
+    `;
+    
+    // Color circle hover effect
+    colorCircle.addEventListener('mouseenter', () => {
+        colorCircle.style.transform = 'translateY(-50%) scale(1.2)';
+        colorCircle.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+    });
+    
+    colorCircle.addEventListener('mouseleave', () => {
+        colorCircle.style.transform = 'translateY(-50%) scale(1)';
+        colorCircle.style.boxShadow = 'none';
+    });
+    
+    headerElement.appendChild(colorCircle);
+
+    // Create color dropdown
+    const colorDropdown = document.createElement('div');
+    colorDropdown.className = 'section-color-dropdown';
+    colorDropdown.style.cssText = `
+        position: absolute;
+        left: 18px;
+        top: calc(100% + 2px);
+        display: none;
+        z-index: 10000;
+        padding: 2px;
+        min-width: 24px;
+    `;
+    
+    // Initially hide the dropdown
+    colorDropdown.style.display = 'none';
+    
+    // Add color options to dropdown
+    colorOptions.forEach(colorOption => {
+        const colorSwatch = document.createElement('div');
+        const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
+        const swatchColor = isDarkTheme ? colorOption.dark : colorOption.light;
+        colorSwatch.className = 'color-dropdown-swatch';
+        colorSwatch.title = colorOption.name;
+        colorSwatch.style.cssText = `
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: ${swatchColor};
+            margin: 2px;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+            display: inline-block;
+        `;
+        
+        colorSwatch.addEventListener('mouseenter', () => {
+            colorSwatch.style.transform = 'scale(1.2)';
+            colorSwatch.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+        });
+        
+        colorSwatch.addEventListener('mouseleave', () => {
+            colorSwatch.style.transform = 'scale(1)';
+            colorSwatch.style.boxShadow = 'none';
+        });
+        
+        colorSwatch.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sectionColors[sectionName] = colorOption.name;
+            saveSectionColors();
+            
+            // Update the color circle
+            const newColor = getSectionColor(sectionName);
+            colorCircle.style.backgroundColor = newColor;
+            
+            // Hide dropdown
+            colorDropdown.style.display = 'none';
+            
+            // Re-render to update all instances
+            renderAllTabs();
+        });
+        
+        colorDropdown.appendChild(colorSwatch);
+    });
+    
+    // Add "No Color" option
+    const noColorSwatch = document.createElement('div');
+    noColorSwatch.className = 'color-dropdown-swatch';
+    noColorSwatch.title = 'No Color';
+    noColorSwatch.style.cssText = `
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: transparent;
+        margin: 2px;
+        cursor: pointer;
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+        display: inline-block;
+    `;
+    
+    noColorSwatch.addEventListener('mouseenter', () => {
+        noColorSwatch.style.transform = 'scale(1.2)';
+        noColorSwatch.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+    });
+    
+    noColorSwatch.addEventListener('mouseleave', () => {
+        noColorSwatch.style.transform = 'scale(1)';
+        noColorSwatch.style.boxShadow = 'none';
+    });
+    
+    noColorSwatch.addEventListener('click', (e) => {
+        e.stopPropagation();
+        delete sectionColors[sectionName];
+        saveSectionColors();
+        
+        // Update the color circle
+        colorCircle.style.backgroundColor = 'transparent';
+        
+        // Hide dropdown
+        colorDropdown.style.display = 'none';
+        
+        // Re-render to update all instances
+        renderAllTabs();
+    });
+    
+    colorDropdown.appendChild(noColorSwatch);
+    headerElement.appendChild(colorDropdown);
+    
+    // Color circle click handler to show/hide dropdown
+    colorCircle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        
+        // Hide all other dropdowns first
+        document.querySelectorAll('.section-color-dropdown').forEach(dropdown => {
+            if (dropdown !== colorDropdown) {
+                (dropdown as HTMLElement).style.display = 'none';
+            }
+        });
+        
+        // Toggle this dropdown
+        const isVisible = colorDropdown.style.display === 'flex';
+        colorDropdown.style.display = isVisible ? 'none' : 'flex';
+        
+        // Update color swatches in dropdown based on current theme
+        const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
+        const colorSwatches = colorDropdown.querySelectorAll('.color-dropdown-swatch');
+        colorSwatches.forEach((swatch, index) => {
+            if (index < colorOptions.length) {
+                const colorOption = colorOptions[index];
+                const swatchColor = isDarkTheme ? colorOption.dark : colorOption.light;
+                (swatch as HTMLElement).style.backgroundColor = swatchColor;
+            }
+        });
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!headerElement.contains(e.target as Node)) {
+            colorDropdown.style.display = 'none';
+        }
+    });
 
     // Section drag functionality
     dragHandle.addEventListener('mousedown', (e) => {
@@ -1147,6 +1345,32 @@ function saveSections() {
     localStorage.setItem('sections', JSON.stringify(sections));
 }
 
+// Save section colors to localStorage
+function saveSectionColors() {
+    localStorage.setItem('sectionColors', JSON.stringify(sectionColors));
+}
+
+// Load section colors from localStorage
+function loadSectionColors() {
+    const savedColors = localStorage.getItem('sectionColors');
+    if (savedColors) {
+        sectionColors = JSON.parse(savedColors);
+    }
+}
+
+// Get current theme-appropriate color for a section
+function getSectionColor(sectionName: string): string {
+    const colorName = sectionColors[sectionName];
+    if (!colorName) return 'transparent';
+    
+    const colorOption = colorOptions.find(opt => opt.name === colorName);
+    if (!colorOption) return 'transparent';
+    
+    // Check if we're in dark theme
+    const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
+    return isDarkTheme ? colorOption.dark : colorOption.light;
+}
+
 // Load tabs from localStorage
 function loadTabs() {
     console.log('🔄 Loading tabs from localStorage...');
@@ -1167,6 +1391,9 @@ function loadTabs() {
     } else {
         console.log('📁 No saved sections found');
     }
+    
+    // Load section colors
+    loadSectionColors();
 
     // Always render after loading both tabs and sections
     if (tabs.length > 0 || sections.length > 0) {
@@ -1594,6 +1821,44 @@ class ThemeManager {
                 '<span class="theme-icon sun">☀️</span>';
             themeButton.title = `Switch to ${this.currentTheme === 'light' ? 'dark' : 'light'} mode`;
         }
+        
+        // Update section colors when theme changes
+        this.updateSectionColors();
+    }
+    
+    private updateSectionColors(): void {
+        // Update all section color circles and headers
+        document.querySelectorAll('.section-color-circle').forEach(circle => {
+            const header = circle.closest('.section-header') as HTMLElement;
+            if (header) {
+                const sectionName = header.getAttribute('data-section');
+                if (sectionName) {
+                    const newColor = getSectionColor(sectionName);
+                    (circle as HTMLElement).style.backgroundColor = newColor || 'transparent';
+                    
+                    // Update section header color
+                    if (newColor && newColor !== 'transparent') {
+                        header.style.backgroundColor = newColor;
+                        header.style.color = 'white';
+                    } else {
+                        header.style.backgroundColor = '';
+                        header.style.color = '';
+                    }
+                }
+            }
+        });
+        
+        // Update color swatches in any open dropdowns
+        document.querySelectorAll('.section-color-dropdown').forEach(dropdown => {
+            const colorSwatches = dropdown.querySelectorAll('.color-dropdown-swatch');
+            colorSwatches.forEach((swatch, index) => {
+                if (index < colorOptions.length) {
+                    const colorOption = colorOptions[index];
+                    const swatchColor = this.currentTheme === 'dark' ? colorOption.dark : colorOption.light;
+                    (swatch as HTMLElement).style.backgroundColor = swatchColor;
+                }
+            });
+        });
     }
 
     private setupThemeToggle(): void {

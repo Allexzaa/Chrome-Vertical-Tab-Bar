@@ -6,7 +6,7 @@
     <title>Vertical Tab Bar</title>
     <style>
         :root {
-            --bg-color: #ffffff;
+            --bg-color: #f8f9fa;
             --text-color: #333333;
             --tab-bg: #f0f0f0;
             --tab-hover: #e0e0e0;
@@ -557,6 +557,47 @@
 
         .modal button.primary:hover {
             background: #005a9e;
+        }
+
+        /* Section color dropdown styles */
+        .section-color-dropdown {
+            position: absolute !important;
+            z-index: 10000 !important;
+        }
+
+        .color-dropdown-swatch {
+            transition: all 0.2s ease !important;
+        }
+
+        .color-dropdown-swatch:hover {
+            transform: scale(1.2) !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+        }
+
+        .section-color-circle {
+            transition: all 0.2s ease !important;
+            z-index: 1000 !important;
+        }
+
+        .section-color-circle:hover {
+            transform: translateY(-50%) scale(1.2) !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+        }
+
+        /* Ensure section headers have proper positioning context */
+        .section-header {
+            position: relative !important;
+            z-index: 100 !important;
+        }
+
+        /* Ensure dropdowns appear above tabs */
+        .section-color-dropdown {
+            z-index: 10000 !important;
+        }
+
+        /* Dark theme adjustments for color dropdown */
+        [data-theme="dark"] .color-dropdown-swatch:hover {
+            box-shadow: 0 2px 8px rgba(255,255,255,0.2) !important;
         }
     </style>
 </head>
