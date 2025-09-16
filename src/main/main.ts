@@ -72,20 +72,91 @@ function createWindow() {
         }
     });
 
+    // Handle window controls
+    ipcMain.on('minimize-window', () => {
+        if (mainWindow) {
+            mainWindow.minimize();
+        }
+    });
+
+    ipcMain.on('maximize-window', () => {
+        if (mainWindow) {
+            if (mainWindow.isMaximized()) {
+                mainWindow.unmaximize();
+            } else {
+                mainWindow.maximize();
+            }
+        }
+    });
+
+    ipcMain.on('close-window', () => {
+        if (mainWindow) {
+            mainWindow.close();
+        }
+    });
+
     // Set up context menu
-    ipcMain.on('show-context-menu', (event, tabId: string) => {
+    ipcMain.on('show-context-menu', (event, tabId: string, sections?: string[]) => {
+        const sectionMenuItems = sections ? sections.map(section => ({
+            label: section,
+            click: () => {
+                mainWindow?.webContents.send('move-tab-to-section', tabId, section);
+            }
+        })) : [];
+
         const contextMenu = Menu.buildFromTemplate([
             {
-                label: 'Toggle Pin',
-                click: () => {
-                    mainWindow?.webContents.send('toggle-pin', tabId);
-                }
+                label: 'Move to Section',
+                submenu: [
+                    ...sectionMenuItems,
+                    { type: 'separator' },
+                    {
+                        label: 'New Section...',
+                        click: () => {
+                            mainWindow?.webContents.executeJavaScript(`
+                                window.showSectionModal('${tabId}');
+                            `);
+                        }
+                    }
+                ]
             },
             { type: 'separator' },
             {
                 label: 'Remove Tab',
                 click: () => {
                     mainWindow?.webContents.send('remove-tab', tabId);
+                }
+            }
+        ]);
+        contextMenu.popup();
+    });
+
+    // Handle moving tab to section
+    ipcMain.on('move-tab-to-section', (event, tabId: string, section: string) => {
+        mainWindow?.webContents.send('move-tab-to-section', tabId, section);
+    });
+
+    // Set up empty space context menu
+    ipcMain.on('show-empty-space-context-menu', (event) => {
+        const contextMenu = Menu.buildFromTemplate([
+            {
+                label: 'Create New Section',
+                click: () => {
+                    mainWindow?.webContents.executeJavaScript(`
+                        window.showSectionModal();
+                    `);
+                }
+            },
+            { type: 'separator' },
+            {
+                label: 'Add New Tab',
+                click: () => {
+                    mainWindow?.webContents.executeJavaScript(`
+                        const url = prompt('Enter the URL:', 'https://');
+                        if (url) {
+                            window.addTab(url);
+                        }
+                    `);
                 }
             }
         ]);
@@ -104,7 +175,7 @@ function createWindow() {
             tray = new Tray(icon);
         }
     } catch (error) {
-        console.error('Failed to create tray:', error);
+        // Tray creation failed - app will continue without tray
     }
     
     const trayMenu = Menu.buildFromTemplate([
@@ -126,6 +197,14 @@ function createWindow() {
                     if (url) {
                         window.addTab(url);
                     }
+                `);
+            }
+        },
+        {
+            label: 'Create New Section',
+            click: () => {
+                mainWindow?.webContents.executeJavaScript(`
+                    window.showSectionModal();
                 `);
             }
         },

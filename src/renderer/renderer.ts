@@ -18,6 +18,10 @@ declare const Sortable: {
         handle?: string;
         forceFallback?: boolean;
         fallbackClass?: string;
+        swapThreshold?: number;
+        emptyInsertThreshold?: number;
+        group?: string | { name: string; pull?: boolean; put?: boolean };
+        sort?: boolean;
         setData?: (dataTransfer: DataTransfer, dragEl: HTMLElement) => void;
         onStart?: (evt: SortableEvent) => void;
         onMove?: (evt: SortableEvent & { originalEvent: DragEvent }) => void;
@@ -30,15 +34,19 @@ interface Tab {
     url: string;
     title: string;
     favicon: string;
-    isPinned: boolean;
+    section?: string;
 }
 
 let tabs: Tab[] = [];
 let tabContainer: HTMLElement | null = null;
+let sections: string[] = [];
+let currentDraggedTabId: string | null = null;
+let globalIsCurrentlyDragging = false;
 
-// Function to force reset styles and prevent stuck background colors
+// Improved function to force reset styles and prevent stuck states
 function forceResetStyles() {
     requestAnimationFrame(() => {
+        // Reset background colors
         document.body.style.background = 'var(--bg-color)';
         const container = document.querySelector('.container') as HTMLElement;
         const appRoot = document.getElementById('app-root');
@@ -46,19 +54,37 @@ function forceResetStyles() {
         if (appRoot) appRoot.style.background = 'var(--bg-color)';
         if (tabContainer) tabContainer.style.background = 'var(--bg-color)';
 
-        // Clean up any remaining drag artifacts on all tabs
-        const allTabs = document.querySelectorAll('.tab');
-        allTabs.forEach(tab => {
-            const tabElement = tab as HTMLElement;
-            tabElement.style.position = '';
-            tabElement.style.left = '';
-            tabElement.style.top = '';
-            tabElement.style.transform = '';
-            tabElement.style.zIndex = '';
-            tabElement.style.opacity = '';
-            tabElement.style.pointerEvents = '';
-            tabElement.classList.remove('sortable-drag', 'sortable-fallback', 'sortable-ghost');
+        // Clean up all drag-related classes and styles
+        const allElements = document.querySelectorAll('.tab, .section-header');
+        allElements.forEach(element => {
+            const el = element as HTMLElement;
+
+            // Remove all drag-related classes
+            el.classList.remove(
+                'sortable-drag',
+                'sortable-fallback',
+                'sortable-ghost',
+                'drag-hover',
+                'drop-target',
+                'drag-over'
+            );
+
+            // Reset inline styles that might be set by SortableJS
+            el.style.position = '';
+            el.style.left = '';
+            el.style.top = '';
+            el.style.transform = '';
+            el.style.zIndex = '';
+            el.style.opacity = '';
+            el.style.pointerEvents = '';
+            el.style.cursor = '';
+
+            // Remove drag attributes
+            el.removeAttribute('data-dragging');
         });
+
+        // Remove global drag class
+        document.body.classList.remove('dragging');
     });
 }
 
@@ -69,7 +95,6 @@ function initializeApp() {
     const container = document.querySelector('.container') as HTMLElement;
 
     // Track dragging state globally to prevent conflicts
-    let globalIsCurrentlyDragging = false;
 
     // Add global cleanup event listeners to prevent stuck drag states
     document.addEventListener('mouseup', () => {
@@ -103,78 +128,196 @@ function initializeApp() {
     });
 
 
-    // Initialize sortable
+    // Initialize sortable with simplified drag and drop
     if (tabContainer) {
-        let currentDragElement: HTMLElement | null = null;
+        // Simplified drag state management
+        interface DragState {
+            tabId: string | null;
+            fromSection: string | null;
+            targetSection: string | null;
+            isActive: boolean;
+        }
 
-        Sortable.create(tabContainer, {
-            animation: 150,
+        let dragState: DragState = {
+            tabId: null,
+            fromSection: null,
+            targetSection: null,
+            isActive: false
+        };
+
+        // Clear any existing sortable instance
+        const existingSortable = (tabContainer as any).sortable;
+        if (existingSortable) {
+            existingSortable.destroy();
+        }
+
+        // Add global mouse tracking during drag
+        let globalMouseTracker: ((e: MouseEvent) => void) | null = null;
+
+        const sortableInstance = Sortable.create(tabContainer, {
+            animation: 200,
             ghostClass: 'sortable-ghost',
             dragClass: 'sortable-drag',
-            draggable: '.tab',  // Only make tab elements draggable
-            handle: '.tab',     // Use the entire tab as the drag handle
-            forceFallback: true, // Force fallback for better control
-            fallbackClass: 'sortable-fallback',
-            setData: function (dataTransfer: DataTransfer, dragEl: HTMLElement) {
-                // Required for Firefox
-                dataTransfer.setData('Text', dragEl.textContent || '');
-            },
+            draggable: '.tab',
+            handle: '.tab',
+            group: 'tabs',
+            sort: true,
+            forceFallback: true,
+
             onStart: (evt: SortableEvent) => {
+                // Initialize drag state
+                dragState.isActive = true;
+                dragState.tabId = evt.item.id;
+                dragState.fromSection = tabs.find(t => t.id === evt.item.id)?.section || 'Unsorted';
+                dragState.targetSection = null;
+
+                // Set global state
                 globalIsCurrentlyDragging = true;
+                currentDraggedTabId = dragState.tabId;
                 document.body.classList.add('dragging');
-                currentDragElement = evt.item;
+
+                // Mark the dragged element
+                evt.item.setAttribute('data-dragging', 'true');
+
+
+
+                // Add global mouse tracking since onMove isn't reliable
+                globalMouseTracker = (e: MouseEvent) => {
+                    if (!dragState.isActive) return;
+
+                    // Clear previous highlights
+                    document.querySelectorAll('.section-header').forEach(header => {
+                        header.classList.remove('drag-hover');
+                    });
+
+                    dragState.targetSection = null;
+
+                    // Check all section headers
+                    const allSectionHeaders = document.querySelectorAll('.section-header');
+                    allSectionHeaders.forEach(header => {
+                        const rect = header.getBoundingClientRect();
+                        const sectionName = header.getAttribute('data-section');
+
+                        // Expand hit area significantly
+                        const expandedTop = rect.top - 20;
+                        const expandedBottom = rect.bottom + 40;
+                        const expandedLeft = rect.left - 20;
+                        const expandedRight = rect.right + 20;
+
+                        if (e.clientY >= expandedTop && e.clientY <= expandedBottom &&
+                            e.clientX >= expandedLeft && e.clientX <= expandedRight) {
+                            header.classList.add('drag-hover');
+                            dragState.targetSection = sectionName;
+
+                        }
+                    });
+                };
+
+                document.addEventListener('mousemove', globalMouseTracker);
             },
+
             onEnd: (evt: SortableEvent) => {
-                // Immediate cleanup
-                globalIsCurrentlyDragging = false;
-                document.body.classList.remove('dragging');
 
-                currentDragElement = null;
 
-                // Clean up the dragged element styles after a brief delay
-                // to allow SortableJS to complete its internal cleanup
-                requestAnimationFrame(() => {
-                    if (evt.item) {
-                        evt.item.style.position = '';
-                        evt.item.style.left = '';
-                        evt.item.style.top = '';
-                        evt.item.style.transform = '';
-                        evt.item.style.zIndex = '';
-                        evt.item.style.opacity = '';
-                        evt.item.style.pointerEvents = '';
-                        evt.item.classList.remove('sortable-drag', 'sortable-fallback', 'sortable-ghost');
+                // Remove global mouse tracker
+                if (globalMouseTracker) {
+                    document.removeEventListener('mousemove', globalMouseTracker);
+                    globalMouseTracker = null;
+                }
 
-                        // Force a reflow to ensure styles are applied
-                        evt.item.offsetHeight;
-                    }
-
-                    // Force reset any stuck styles
-                    forceResetStyles();
+                // Clean up visual feedback immediately
+                document.querySelectorAll('.section-header').forEach(header => {
+                    header.classList.remove('drag-hover', 'drop-target', 'drag-over');
                 });
 
-                const newIndex = evt.newIndex ?? 0;
-                const oldIndex = evt.oldIndex ?? 0;
+                evt.item.removeAttribute('data-dragging');
+                document.body.classList.remove('dragging');
 
-                // Only update if indices are valid and different
-                if (oldIndex !== newIndex && oldIndex < tabs.length) {
-                    // Update tabs array based on the new order
-                    const tab = tabs[oldIndex];
-                    tabs.splice(oldIndex, 1);
-                    tabs.splice(newIndex, 0, tab);
+                // Process the drop if we have valid drag state
+                if (dragState.isActive && dragState.tabId) {
+                    const tab = tabs.find(t => t.id === dragState.tabId);
 
-                    // Sort pinned tabs to the top
-                    sortTabs();
-                    saveTabs();
+                    if (tab) {
+                        // Try multiple methods to determine the target section
+                        let finalTargetSection = dragState.targetSection;
+
+                        // Method 1: Use the last known target section from onMove
+                        if (!finalTargetSection) {
+
+                            finalTargetSection = getSectionFromDOMPosition(evt.item);
+                        }
+
+                        // Method 2: Use the current position of the dropped element
+                        if (!finalTargetSection) {
+
+                            const rect = evt.item.getBoundingClientRect();
+                            finalTargetSection = getSectionFromPosition(rect.top + rect.height / 2);
+                        }
+
+                        // Method 3: Check if any section header has drag-hover class
+                        if (!finalTargetSection) {
+                            const hoveredSection = document.querySelector('.section-header.drag-hover');
+                            if (hoveredSection) {
+                                finalTargetSection = hoveredSection.getAttribute('data-section');
+                            }
+                        }
+
+                        // Apply the section change if different and valid
+                        if (finalTargetSection && finalTargetSection !== tab.section) {
+                            tab.section = finalTargetSection;
+
+                            // Add section if it doesn't exist
+                            if (!sections.includes(finalTargetSection) && finalTargetSection !== 'Unsorted') {
+                                sections.push(finalTargetSection);
+                                saveSections();
+                            }
+
+                            // Save and re-render
+                            saveTabs();
+                            renderAllTabs();
+                        }
+                    }
                 }
+
+                // Reset all drag state
+                dragState = {
+                    tabId: null,
+                    fromSection: null,
+                    targetSection: null,
+                    isActive: false
+                };
+                globalIsCurrentlyDragging = false;
+                currentDraggedTabId = null;
+
+                // Force cleanup
+                setTimeout(() => forceResetStyles(), 100);
             }
         });
+
+        // Store reference for cleanup
+        (tabContainer as any).sortable = sortableInstance;
     }
 
     // Initialize resize functionality
     initializeResize(container);
 
+    // Add context menu for empty space
+    if (tabContainer) {
+        tabContainer.addEventListener('contextmenu', (e) => {
+            // Only show context menu if clicking on empty space (not on a tab or section header)
+            const target = e.target as HTMLElement;
+            if (target === tabContainer || target.id === 'tab-container') {
+                e.preventDefault();
+                window.electronAPI.showEmptySpaceContextMenu();
+            }
+        });
+    }
+
     // Load tabs
     loadTabs();
+
+    // Initialize modal
+    initializeModal();
 }
 
 // Initialize resize functionality
@@ -183,16 +326,16 @@ let currentWidth = 90; // Default width for two columns with smaller tabs
 
 function initializeResize(container: HTMLElement) {
     if (!container) return;
-    
+
     // Initialize width from localStorage or default
     const storedWidth = localStorage.getItem('tabBarWidth');
-    
+
     // Set up initial dimensions and styling
     const appRoot = document.getElementById('app-root');
     if (storedWidth) {
         currentWidth = parseInt(storedWidth);
     }
-    
+
     // Apply initial styling
     requestAnimationFrame(() => {
         if (appRoot) {
@@ -208,10 +351,10 @@ function initializeResize(container: HTMLElement) {
     function setWidth(width: number) {
         const boundedWidth = Math.max(90, Math.min(300, width));
         currentWidth = boundedWidth;
-        
+
         // Get all elements that need width update
         const appRoot = document.getElementById('app-root');
-        
+
         // Update all elements atomically
         requestAnimationFrame(() => {
             // Set widths on all layers
@@ -227,7 +370,7 @@ function initializeResize(container: HTMLElement) {
             // Update window size
             window.electronAPI.resizeWindow(boundedWidth);
         });
-        
+
         // Store the width
         localStorage.setItem('tabBarWidth', boundedWidth.toString());
     }
@@ -254,12 +397,12 @@ function initializeResize(container: HTMLElement) {
         function onMouseUp(e: MouseEvent) {
             if (!isResizing) return;
             isResizing = false;
-            
+
             // Calculate final width
             const diff = e.clientX - startX;
             const finalWidth = startWidth + diff;
             setWidth(finalWidth);
-            
+
             // Clean up
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
@@ -294,11 +437,302 @@ function initializeResize(container: HTMLElement) {
     window.electronAPI.resizeWindow(currentWidth);
 }
 
-// Function to sort tabs (pinned tabs go to top)
+// Function to render a section header
+function renderSectionHeader(sectionName: string, isEmpty: boolean = false) {
+    if (!tabContainer) return;
+
+    const headerElement = document.createElement('div');
+    headerElement.className = 'section-header';
+    headerElement.dataset.section = sectionName;
+    headerElement.draggable = true; // Make section headers draggable
+
+    // Add empty section styling if it has no tabs
+    if (isEmpty) {
+        headerElement.classList.add('empty-section');
+        headerElement.style.minHeight = '60px';
+        headerElement.style.display = 'flex';
+        headerElement.style.alignItems = 'center';
+        headerElement.style.justifyContent = 'center';
+    }
+
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = isEmpty ? `${sectionName} (Drop tabs here)` : sectionName;
+    headerElement.appendChild(titleSpan);
+
+    const actionsSpan = document.createElement('span');
+    actionsSpan.className = 'section-actions';
+    headerElement.appendChild(actionsSpan);
+
+    // Move up button
+    const moveUpButton = document.createElement('span');
+    moveUpButton.innerHTML = '⬆️';
+    moveUpButton.title = 'Move section up';
+    moveUpButton.style.marginRight = '2px';
+    actionsSpan.appendChild(moveUpButton);
+
+    // Move down button
+    const moveDownButton = document.createElement('span');
+    moveDownButton.innerHTML = '⬇️';
+    moveDownButton.title = 'Move section down';
+    moveDownButton.style.marginRight = '2px';
+    actionsSpan.appendChild(moveDownButton);
+
+    // Edit button
+    const editButton = document.createElement('span');
+    editButton.innerHTML = '✏️';
+    editButton.title = 'Edit section name';
+    editButton.style.marginRight = '2px';
+    actionsSpan.appendChild(editButton);
+
+    // Delete button
+    const deleteButton = document.createElement('span');
+    deleteButton.innerHTML = '<span class="delete-icon">×</span>';
+    deleteButton.title = 'Delete section';
+    deleteButton.style.marginLeft = '2px';
+    actionsSpan.appendChild(deleteButton);
+
+    // Double-click to edit section name
+    headerElement.addEventListener('dblclick', () => {
+        editSectionName(headerElement, sectionName);
+    });
+
+    moveUpButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        moveSectionUp(sectionName);
+    });
+
+    moveDownButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        moveSectionDown(sectionName);
+    });
+
+    editButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        editSectionName(headerElement, sectionName);
+    });
+
+    deleteButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteSection(sectionName);
+    });
+
+    // Enhanced drop target handling for all sections (empty and non-empty)
+    // This works in conjunction with SortableJS
+    headerElement.addEventListener('dragover', (e) => {
+        // Only handle if this is a tab being dragged (not a section)
+        if (currentDraggedTabId) {
+            e.preventDefault();
+            e.stopPropagation();
+            headerElement.classList.add('drag-over');
+        }
+    });
+
+    headerElement.addEventListener('dragleave', (e) => {
+        // Only remove drag-over if we're not moving to a child element
+        if (!headerElement.contains(e.relatedTarget as Node)) {
+            headerElement.classList.remove('drag-over');
+        }
+    });
+
+    headerElement.addEventListener('drop', (e) => {
+        // Only handle if this is a tab being dragged (not a section)
+        if (currentDraggedTabId) {
+            e.preventDefault();
+            e.stopPropagation();
+            headerElement.classList.remove('drag-over');
+
+            // Force the tab to be assigned to this section
+            const tab = tabs.find(t => t.id === currentDraggedTabId);
+            if (tab && tab.section !== sectionName) {
+
+                tab.section = sectionName;
+
+                // Add section if it doesn't exist
+                if (!sections.includes(sectionName) && sectionName !== 'Unsorted') {
+                    sections.push(sectionName);
+                    saveSections();
+                }
+
+                saveTabs();
+                renderAllTabs();
+            }
+        }
+    });
+
+    // Add a drag handle for section reordering
+    const dragHandle = document.createElement('span');
+    dragHandle.innerHTML = '⋮⋮';
+    dragHandle.title = 'Drag to reorder section';
+    dragHandle.style.cssText = `
+        position: absolute;
+        left: 2px;
+        top: 50%;
+        transform: translateY(-50%);
+        cursor: grab;
+        opacity: 0.5;
+        font-size: 12px;
+        line-height: 1;
+        user-select: none;
+    `;
+    headerElement.appendChild(dragHandle);
+
+    // Section drag functionality
+    dragHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        dragHandle.style.cursor = 'grabbing';
+        headerElement.style.opacity = '0.7';
+        headerElement.style.transform = 'scale(0.98)';
+
+        let startY = e.clientY;
+        let currentY = startY;
+
+        const onMouseMove = (e: MouseEvent) => {
+            currentY = e.clientY;
+            const deltaY = currentY - startY;
+
+            // Visual feedback
+            headerElement.style.transform = `scale(0.98) translateY(${deltaY}px)`;
+
+            // Find target section based on mouse position
+            const allSections = Array.from(document.querySelectorAll('.section-header'));
+            allSections.forEach(section => section.classList.remove('section-drop-target'));
+
+            // Find the section we're hovering over
+            for (const section of allSections) {
+                if (section === headerElement) continue;
+
+                const rect = section.getBoundingClientRect();
+                if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    section.classList.add('section-drop-target');
+                    break;
+                }
+            }
+        };
+
+        const onMouseUp = (e: MouseEvent) => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            // Find target section
+            const allSections = Array.from(document.querySelectorAll('.section-header'));
+            let targetSection = null;
+
+            for (const section of allSections) {
+                if (section === headerElement) continue;
+
+                const rect = section.getBoundingClientRect();
+                if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    targetSection = section;
+                    break;
+                }
+            }
+
+            if (targetSection) {
+                const targetSectionName = targetSection.getAttribute('data-section');
+                if (targetSectionName && targetSectionName !== sectionName) {
+
+                    reorderSections(sectionName, targetSectionName);
+                }
+            }
+
+            // Reset styles
+            dragHandle.style.cursor = 'grab';
+            headerElement.style.opacity = '1';
+            headerElement.style.transform = '';
+            allSections.forEach(section => section.classList.remove('section-drop-target'));
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
+
+    tabContainer.appendChild(headerElement);
+}
+
+// Function to edit section name
+function editSectionName(headerElement: HTMLElement, currentName: string) {
+    const titleSpan = headerElement.querySelector('span:first-child');
+    if (!titleSpan) return;
+
+    headerElement.classList.add('editing');
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.style.width = '100%';
+
+    titleSpan.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let isFinished = false;
+
+    function finishEdit() {
+        if (isFinished) return;
+        isFinished = true;
+
+        const newName = input.value.trim() || currentName;
+
+        // Update sections array
+        const sectionIndex = sections.indexOf(currentName);
+        if (sectionIndex !== -1) {
+            sections[sectionIndex] = newName;
+        }
+
+        // Check if input is still in the DOM before replacing
+        if (input.parentNode) {
+            const newSpan = document.createElement('span');
+            newSpan.textContent = newName;
+            input.replaceWith(newSpan);
+        }
+
+        headerElement.classList.remove('editing');
+        headerElement.dataset.section = newName;
+
+        saveTabs();
+        saveSections();
+    }
+
+    function cancelEdit() {
+        if (isFinished) return;
+        isFinished = true;
+
+        // Check if input is still in the DOM before replacing
+        if (input.parentNode) {
+            const span = document.createElement('span');
+            span.textContent = currentName;
+            input.replaceWith(span);
+        }
+
+        headerElement.classList.remove('editing');
+    }
+
+    input.addEventListener('blur', finishEdit);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            finishEdit();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+        }
+    });
+}
+
+// Function to sort tabs by section
 function sortTabs() {
     tabs.sort((a, b) => {
-        if (a.isPinned === b.isPinned) return 0;
-        return a.isPinned ? -1 : 1;
+        // Sort by section
+        const sectionA = a.section || 'Unsorted';
+        const sectionB = b.section || 'Unsorted';
+
+        if (sectionA !== sectionB) {
+            return sectionA.localeCompare(sectionB);
+        }
+
+        return 0;
     });
     renderAllTabs();
 }
@@ -312,41 +746,315 @@ function addTab(url: string) {
 (window as any).addTab = addTab;
 
 // Function to add a new tab with custom title
-function addTabWithTitle(url: string, title: string) {
+function addTabWithTitle(url: string, title: string, section?: string) {
     const id = `tab-${Date.now()}`;
     const tab: Tab = {
         id,
         url,
         title: title,
         favicon: `https://www.google.com/s2/favicons?domain=${url}`,
-        isPinned: false
+        section: section || 'Unsorted'
     };
 
     tabs.push(tab);
-    renderTab(tab);
+
+    // Add the section to sections array if it doesn't exist
+    if (section && !sections.includes(section) && section !== 'Unsorted') {
+        sections.push(section);
+        saveSections();
+    }
+
+    renderAllTabs();
     saveTabs();
 }
 
-// Function to toggle pin state
-function togglePin(tabId: string) {
+// Function to update sections array - no longer based on tabs since they don't store sections
+function updateSections() {
+    // Since tabs no longer store section info, just save current sections array
+    saveSections();
+}
+
+// Function to move tab to different section
+function moveTabToSection(tabId: string, newSection: string) {
     const tab = tabs.find(t => t.id === tabId);
     if (tab) {
-        tab.isPinned = !tab.isPinned;
-        sortTabs();
+        tab.section = newSection;
+
+        // Add the section to sections array if it doesn't exist
+        if (!sections.includes(newSection) && newSection !== 'Unsorted') {
+            sections.push(newSection);
+            saveSections();
+        }
+
+        renderAllTabs();
         saveTabs();
     }
 }
 
-// Function to render all tabs
+// Function to determine which section a tab should be in based on DOM position
+function getTabSectionAtIndex(index: number): string | null {
+    if (!tabContainer) return null;
+
+    const allElements = Array.from(tabContainer.children);
+    let currentSection: string | null = null;
+    let tabIndex = 0;
+
+    for (let i = 0; i < allElements.length; i++) {
+        const element = allElements[i];
+
+        if (element.classList.contains('section-header')) {
+            currentSection = element.getAttribute('data-section') || 'Unsorted';
+        } else if (element.classList.contains('tab')) {
+            if (tabIndex === index) {
+                return currentSection || 'Unsorted';
+            }
+            tabIndex++;
+        }
+    }
+
+    // If we're adding at the end, use the last section
+    return currentSection || 'Unsorted';
+}
+
+// Function to determine section based on actual DOM element position
+function getTabSectionFromDOM(tabElement: HTMLElement): string | null {
+    if (!tabContainer || !tabElement) return null;
+
+    let currentElement = tabElement.previousElementSibling;
+
+    // Walk backwards to find the nearest section header
+    while (currentElement) {
+        if (currentElement.classList.contains('section-header')) {
+            return currentElement.getAttribute('data-section') || 'Unsorted';
+        }
+        currentElement = currentElement.previousElementSibling;
+    }
+
+    // If no section header found above, check if there's one at the beginning
+    const firstElement = tabContainer.firstElementChild;
+    if (firstElement && firstElement.classList.contains('section-header')) {
+        return firstElement.getAttribute('data-section') || 'Unsorted';
+    }
+
+    return 'Unsorted';
+}
+
+// Improved function to get section from Y position
+function getSectionFromPosition(clientY: number): string | null {
+    if (!tabContainer) return null;
+
+    const sectionHeaders = Array.from(tabContainer.querySelectorAll('.section-header'));
+
+    if (sectionHeaders.length === 0) {
+        return 'Unsorted';
+    }
+
+    // Sort headers by their Y position
+    const sortedHeaders = sectionHeaders.sort((a, b) => {
+        const aRect = a.getBoundingClientRect();
+        const bRect = b.getBoundingClientRect();
+        return aRect.top - bRect.top;
+    });
+
+    // Find which section the Y position falls into
+    for (let i = 0; i < sortedHeaders.length; i++) {
+        const header = sortedHeaders[i];
+        const headerRect = header.getBoundingClientRect();
+
+        // If we're above or within this header, it's our target
+        if (clientY <= headerRect.bottom + 50) { // Add some buffer below header
+            const sectionName = header.getAttribute('data-section');
+            console.log(`📍 Position ${clientY} maps to section: ${sectionName}`);
+            return sectionName || 'Unsorted';
+        }
+    }
+
+    // If we're below all headers, use the last section
+    const lastHeader = sortedHeaders[sortedHeaders.length - 1];
+    const lastSectionName = lastHeader.getAttribute('data-section') || 'Unsorted';
+    console.log(`📍 Below all headers, using last section: ${lastSectionName}`);
+    return lastSectionName;
+}
+
+// Function to determine section from DOM position (fallback)
+function getSectionFromDOMPosition(tabElement: HTMLElement): string | null {
+    if (!tabContainer || !tabElement) return null;
+
+    // Walk backwards to find the nearest section header
+    let currentElement = tabElement.previousElementSibling;
+
+    while (currentElement) {
+        if (currentElement.classList.contains('section-header')) {
+            return currentElement.getAttribute('data-section') || 'Unsorted';
+        }
+        currentElement = currentElement.previousElementSibling;
+    }
+
+    // If no section header found, check if there's one at the beginning
+    const firstElement = tabContainer.firstElementChild;
+    if (firstElement && firstElement.classList.contains('section-header')) {
+        return firstElement.getAttribute('data-section') || 'Unsorted';
+    }
+
+    return 'Unsorted';
+}
+
+// Function to detect which section a drop event occurred in
+function getDropTargetSection(event: DragEvent): string {
+    if (!tabContainer) return 'Unsorted';
+
+    const rect = tabContainer.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    // Find the element at the drop position within the tab container
+    const elementAtPoint = document.elementFromPoint(event.clientX, event.clientY);
+
+    if (!elementAtPoint) return 'Unsorted';
+
+    // Check if the drop was directly on a section header
+    if (elementAtPoint.classList.contains('section-header')) {
+        return elementAtPoint.getAttribute('data-section') || 'Unsorted';
+    }
+
+    // Check if the drop was on a tab - find its section
+    if (elementAtPoint.classList.contains('tab')) {
+        const tabId = elementAtPoint.getAttribute('data-id');
+        if (tabId) {
+            // Tabs no longer store section info
+            // Section is determined by position only
+        }
+    }
+
+    // Check if the element is inside a section by traversing up the DOM
+    let currentElement: Element | null = elementAtPoint;
+    while (currentElement && currentElement !== tabContainer) {
+        if (currentElement.classList && currentElement.classList.contains('section-header')) {
+            return currentElement.getAttribute('data-section') || 'Unsorted';
+        }
+        currentElement = currentElement.parentElement;
+    }
+
+    // Find the section based on the Y position of the drop
+    const allElements = Array.from(tabContainer.children);
+    let currentSection = 'Unsorted';
+    let currentY = 0;
+
+    for (const element of allElements) {
+        const elementRect = element.getBoundingClientRect();
+        const relativeY = elementRect.top - rect.top;
+
+        if (element.classList.contains('section-header')) {
+            currentSection = element.getAttribute('data-section') || 'Unsorted';
+            if (y >= relativeY && y <= relativeY + elementRect.height + 50) {
+                // Within the section header or shortly after it
+                return currentSection;
+            }
+        } else if (element.classList.contains('tab')) {
+            if (y >= relativeY && y <= relativeY + elementRect.height) {
+                // Within a tab area, use the current section
+                return currentSection;
+            }
+        }
+        currentY = relativeY + elementRect.height;
+    }
+
+    // If no specific section found, return the last section or default
+    return sections.length > 0 ? sections[sections.length - 1] : 'Unsorted';
+}
+
+
+// Function to render all tabs grouped by sections
 function renderAllTabs() {
-    if (!tabContainer) return;
+    if (!tabContainer) {
+        console.error('❌ tabContainer not found, cannot render tabs');
+        return;
+    }
 
-    // Clear only tab elements, preserve resize handle
-    const tabElements = tabContainer.querySelectorAll('.tab');
-    tabElements.forEach(el => el.remove());
+    console.log('🎨 Starting renderAllTabs...');
 
-    // Render all tabs
-    tabs.forEach(renderTab);
+    // Clear all elements except resize handle
+    const elementsToRemove = tabContainer.querySelectorAll('.tab, .section-header');
+    elementsToRemove.forEach(el => el.remove());
+    console.log(`🧹 Cleared ${elementsToRemove.length} existing elements`);
+
+    // Group tabs by section
+    const tabsBySection: { [section: string]: Tab[] } = {};
+
+    // Initialize with existing sections
+    sections.forEach(section => {
+        tabsBySection[section] = [];
+    });
+
+    // Add "Unsorted" section for tabs without a section
+    tabsBySection['Unsorted'] = [];
+
+    // Group tabs by their assigned section
+    tabs.forEach(tab => {
+        const section = tab.section || 'Unsorted';
+        if (!tabsBySection[section]) {
+            tabsBySection[section] = [];
+        }
+        tabsBySection[section].push(tab);
+    });
+
+    // Get all sections that actually have tabs or are in the sections array
+    const allSectionsWithTabs = new Set([
+        ...sections, // Explicitly created sections
+        ...Object.keys(tabsBySection).filter(section => tabsBySection[section].length > 0) // Sections with tabs
+    ]);
+
+    // Convert to array and maintain sections order, with Unsorted at the end
+    const sectionsToRender: string[] = [];
+
+    // Add sections in their defined order
+    sections.forEach(section => {
+        if (allSectionsWithTabs.has(section)) {
+            sectionsToRender.push(section);
+        }
+    });
+
+    // Add any remaining sections (like those with tabs but not in sections array)
+    Array.from(allSectionsWithTabs).forEach(section => {
+        if (!sectionsToRender.includes(section) && section !== 'Unsorted') {
+            sectionsToRender.push(section);
+        }
+    });
+
+    // Add Unsorted at the end if it has tabs
+    if (allSectionsWithTabs.has('Unsorted')) {
+        sectionsToRender.push('Unsorted');
+    }
+
+    console.log('Rendering sections:', sectionsToRender);
+    console.log('Tabs by section:', tabsBySection);
+
+    sectionsToRender.forEach(section => {
+        // Check if section is empty
+        const sectionTabs = tabsBySection[section] || [];
+        const isEmpty = sectionTabs.length === 0;
+
+        console.log(`Rendering section "${section}" with ${sectionTabs.length} tabs`);
+
+        // Always render section header
+        renderSectionHeader(section, isEmpty);
+
+        // Render tabs in this section
+        if (sectionTabs.length > 0) {
+            sectionTabs.forEach(tab => {
+                renderTab(tab);
+            });
+        }
+    });
+
+    // Update sections array to include any new sections from tabs
+    Object.keys(tabsBySection).forEach(section => {
+        if (section !== 'Unsorted' && !sections.includes(section)) {
+            sections.push(section);
+        }
+    });
+
+    updateSections();
 }
 
 // Function to render a single tab
@@ -354,25 +1062,16 @@ function renderTab(tab: Tab) {
     if (!tabContainer) return;
 
     const tabElement = document.createElement('div');
-    tabElement.className = `tab${tab.isPinned ? ' pinned' : ''}`;
+    tabElement.className = 'tab';
     tabElement.id = tab.id;
 
     const favicon = document.createElement('img');
     favicon.src = tab.favicon;
     favicon.alt = tab.title;
 
-    const pinButton = document.createElement('div');
-    pinButton.className = 'pin-button';
-    pinButton.innerHTML = tab.isPinned ? '📌' : '📍';
-    pinButton.onclick = (e) => {
-        e.stopPropagation();
-        togglePin(tab.id);
-    };
-
     tabElement.title = tab.title;
 
     tabElement.appendChild(favicon);
-    tabElement.appendChild(pinButton);
     tabContainer.appendChild(tabElement);
 
     // Add click event to open URL in default browser
@@ -383,7 +1082,8 @@ function renderTab(tab: Tab) {
     // Add context menu event
     tabElement.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        window.electronAPI.showContextMenu(tab.id);
+        updateSections();
+        window.electronAPI.showContextMenu(tab.id, sections);
     });
 }
 
@@ -392,12 +1092,38 @@ function saveTabs() {
     localStorage.setItem('tabs', JSON.stringify(tabs));
 }
 
+// Save sections to localStorage
+function saveSections() {
+    localStorage.setItem('sections', JSON.stringify(sections));
+}
+
 // Load tabs from localStorage
 function loadTabs() {
+    console.log('🔄 Loading tabs from localStorage...');
+
     const savedTabs = localStorage.getItem('tabs');
     if (savedTabs) {
         tabs = JSON.parse(savedTabs);
+        console.log(`📋 Loaded ${tabs.length} tabs:`, tabs);
+    } else {
+        console.log('📋 No saved tabs found');
+    }
+
+    // Load sections
+    const savedSections = localStorage.getItem('sections');
+    if (savedSections) {
+        sections = JSON.parse(savedSections);
+        console.log(`📁 Loaded ${sections.length} sections:`, sections);
+    } else {
+        console.log('📁 No saved sections found');
+    }
+
+    // Always render after loading both tabs and sections
+    if (tabs.length > 0 || sections.length > 0) {
+        console.log('🎨 Rendering tabs...');
         renderAllTabs();
+    } else {
+        console.log('🎨 Nothing to render');
     }
 }
 
@@ -487,7 +1213,7 @@ document.addEventListener('drop', (e) => {
 
                             // Try to find any URL in the HTML
                             const urlMatch = data.match(/href=["']([^"']+)["']/i) ||
-                                           data.match(/(https?:\/\/[^\s<>"']+)/);
+                                data.match(/(https?:\/\/[^\s<>"']+)/);
                             if (urlMatch && urlMatch[1] && urlMatch[1].match(/^https?:\/\//)) {
                                 url = urlMatch[1];
                             }
@@ -559,7 +1285,8 @@ document.addEventListener('drop', (e) => {
             }
 
             const finalTitle = title || url;
-            addTabWithTitle(url, finalTitle);
+            const targetSection = getDropTargetSection(e);
+            addTabWithTitle(url, finalTitle, targetSection);
         }
     } else {
         // Show user-friendly message about Chrome tab limitations
@@ -596,11 +1323,6 @@ document.addEventListener('drop', (e) => {
 });
 
 // Handle IPC events
-if (window.electronAPI && window.electronAPI.onTogglePin) {
-    window.electronAPI.onTogglePin((tabId: string) => {
-        togglePin(tabId);
-    });
-}
 
 if (window.electronAPI && window.electronAPI.onRemoveTab) {
     window.electronAPI.onRemoveTab((tabId: string) => {
@@ -612,6 +1334,189 @@ if (window.electronAPI && window.electronAPI.onRemoveTab) {
         }
     });
 }
+
+if (window.electronAPI && window.electronAPI.onMoveTabToSection) {
+    window.electronAPI.onMoveTabToSection((tabId: string, section: string) => {
+        moveTabToSection(tabId, section);
+    });
+}
+
+// Variables for modal handling
+let currentTabIdForSection: string | null = null;
+
+// Function to show the section creation modal
+function showSectionModal(tabId?: string) {
+    currentTabIdForSection = tabId || null;
+    const modal = document.getElementById('section-modal') as HTMLElement;
+    const input = document.getElementById('section-name-input') as HTMLInputElement;
+
+    modal.style.display = 'block';
+    input.value = '';
+    input.focus();
+}
+
+// Function to confirm section creation
+function confirmCreateSection() {
+    const input = document.getElementById('section-name-input') as HTMLInputElement;
+    const sectionName = input.value.trim();
+
+    if (sectionName) {
+        if (currentTabIdForSection) {
+            // Move specific tab to new section
+            moveTabToSection(currentTabIdForSection, sectionName);
+        } else {
+            // Create empty section
+            createNewSection(sectionName);
+        }
+    }
+
+    cancelCreateSection();
+}
+
+// Function to cancel section creation
+function cancelCreateSection() {
+    const modal = document.getElementById('section-modal') as HTMLElement;
+    modal.style.display = 'none';
+    currentTabIdForSection = null;
+}
+
+// Function to create a new empty section
+function createNewSection(sectionName: string) {
+    if (!sections.includes(sectionName)) {
+        sections.push(sectionName); // Add to end, don't sort
+        saveSections();
+        renderAllTabs(); // Re-render to show the new section (even if empty)
+    }
+}
+
+// Function to reorder sections
+function reorderSections(draggedSection: string, targetSection: string) {
+    const draggedIndex = sections.indexOf(draggedSection);
+    const targetIndex = sections.indexOf(targetSection);
+
+    console.log(`Reordering: ${draggedSection} (${draggedIndex}) -> ${targetSection} (${targetIndex})`);
+    console.log('Before reorder:', [...sections]);
+
+    if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
+        // Create a new array to avoid mutation issues
+        const newSections = [...sections];
+
+        // Remove the dragged section
+        const [draggedItem] = newSections.splice(draggedIndex, 1);
+
+        // Calculate the new insertion index
+        let insertIndex = targetIndex;
+        if (draggedIndex < targetIndex) {
+            insertIndex = targetIndex - 1; // Adjust for the removed item
+        }
+
+        // Insert the dragged section at the new position
+        newSections.splice(insertIndex, 0, draggedItem);
+
+        // Update the sections array
+        sections.length = 0;
+        sections.push(...newSections);
+
+        console.log('After reorder:', [...sections]);
+        saveSections();
+        renderAllTabs();
+    } else {
+        console.log('Reorder failed: invalid indices or same position');
+    }
+}
+
+// Function to move section up
+function moveSectionUp(sectionName: string) {
+    const index = sections.indexOf(sectionName);
+    if (index > 0) {
+        // Swap with previous section
+        [sections[index - 1], sections[index]] = [sections[index], sections[index - 1]];
+        saveSections();
+        renderAllTabs();
+    }
+}
+
+// Function to move section down
+function moveSectionDown(sectionName: string) {
+    const index = sections.indexOf(sectionName);
+    if (index !== -1 && index < sections.length - 1) {
+        // Swap with next section
+        [sections[index], sections[index + 1]] = [sections[index + 1], sections[index]];
+        saveSections();
+        renderAllTabs();
+    }
+}
+
+// Function to delete a section
+function deleteSection(sectionName: string) {
+    // Ask for confirmation before deleting
+    const confirmed = confirm(`Are you sure you want to delete the section "${sectionName}"?\n\nAny tabs in this section will be moved to "Unsorted".`);
+
+    if (!confirmed) return;
+
+    // Move all tabs in this section to "Unsorted"
+    tabs.forEach(tab => {
+        if (tab.section === sectionName) {
+            tab.section = 'Unsorted';
+        }
+    });
+
+    // Remove the section from the sections array
+    const index = sections.indexOf(sectionName);
+    if (index !== -1) {
+        sections.splice(index, 1);
+    }
+
+    // Save changes and re-render
+    saveSections();
+    saveTabs();
+    renderAllTabs();
+}
+
+// Initialize modal event listeners
+function initializeModal() {
+    const confirmBtn = document.getElementById('confirm-section-btn');
+    const cancelBtn = document.getElementById('cancel-section-btn');
+    const modal = document.getElementById('section-modal') as HTMLElement;
+
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', confirmCreateSection);
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', cancelCreateSection);
+    }
+
+    // Close modal when clicking outside
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                cancelCreateSection();
+            }
+        });
+    }
+}
+
+// Add keyboard support for modal
+document.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('section-modal') as HTMLElement;
+    if (modal && modal.style.display === 'block') {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmCreateSection();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelCreateSection();
+        }
+    }
+});
+
+// Expose functions globally for the context menu and tray
+(window as any).moveTabToSection = moveTabToSection;
+(window as any).createNewSection = () => showSectionModal();
+(window as any).showSectionModal = showSectionModal;
+(window as any).confirmCreateSection = confirmCreateSection;
+(window as any).cancelCreateSection = cancelCreateSection;
 
 
 // Theme management
@@ -633,7 +1538,10 @@ class ThemeManager {
         document.documentElement.setAttribute('data-theme', this.currentTheme);
         const themeButton = document.getElementById('theme-toggle');
         if (themeButton) {
-            themeButton.textContent = this.currentTheme === 'light' ? '🌙' : '☀️';
+            // Use CSS-styled icons for better contrast
+            themeButton.innerHTML = this.currentTheme === 'light' ? 
+                '<span class="theme-icon moon">🌙</span>' : 
+                '<span class="theme-icon sun">☀️</span>';
             themeButton.title = `Switch to ${this.currentTheme === 'light' ? 'dark' : 'light'} mode`;
         }
     }
@@ -663,14 +1571,41 @@ function initializeTheme() {
     new ThemeManager();
 }
 
+// Initialize window controls
+function initializeWindowControls() {
+    const minimizeBtn = document.getElementById('minimize-btn');
+    const maximizeBtn = document.getElementById('maximize-btn');
+    const closeBtn = document.getElementById('close-btn');
+
+    if (minimizeBtn) {
+        minimizeBtn.addEventListener('click', () => {
+            window.electronAPI.minimizeWindow();
+        });
+    }
+
+    if (maximizeBtn) {
+        maximizeBtn.addEventListener('click', () => {
+            window.electronAPI.maximizeWindow();
+        });
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            window.electronAPI.closeWindow();
+        });
+    }
+}
+
 // Wait for DOM to be ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         initializeApp();
         initializeTheme();
+        initializeWindowControls();
     });
 } else {
     // DOM is already loaded
     initializeApp();
     initializeTheme();
+    initializeWindowControls();
 }

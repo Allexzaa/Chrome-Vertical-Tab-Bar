@@ -6,11 +6,17 @@ contextBridge.exposeInMainWorld(
     'electronAPI', {
         addTab: (url: string) => ipcRenderer.send('add-tab', url),
         openUrl: (url: string) => ipcRenderer.send('open-url', url),
-        showContextMenu: (tabId: string) => ipcRenderer.send('show-context-menu', tabId),
-        onWindowResized: (callback: (width: number) => void) => 
+        showContextMenu: (tabId: string, sections?: string[]) => ipcRenderer.send('show-context-menu', tabId, sections),
+        showEmptySpaceContextMenu: () => ipcRenderer.send('show-empty-space-context-menu'),
+        onWindowResized: (callback: (width: number) => void) =>
             ipcRenderer.on('window-resized', (_, width) => callback(width)),
         resizeWindow: (width: number) => ipcRenderer.send('resize-window', width),
-        onTogglePin: (callback: (tabId: string) => void) => ipcRenderer.on('toggle-pin', (_, tabId) => callback(tabId)),
-        onRemoveTab: (callback: (tabId: string) => void) => ipcRenderer.on('remove-tab', (_, tabId) => callback(tabId))
+        onRemoveTab: (callback: (tabId: string) => void) => ipcRenderer.on('remove-tab', (_, tabId) => callback(tabId)),
+        moveTabToSection: (tabId: string, section: string) => ipcRenderer.send('move-tab-to-section', tabId, section),
+        onMoveTabToSection: (callback: (tabId: string, section: string) => void) =>
+            ipcRenderer.on('move-tab-to-section', (_, tabId, section) => callback(tabId, section)),
+        minimizeWindow: () => ipcRenderer.send('minimize-window'),
+        maximizeWindow: () => ipcRenderer.send('maximize-window'),
+        closeWindow: () => ipcRenderer.send('close-window')
     }
 );
