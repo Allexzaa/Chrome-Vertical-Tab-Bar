@@ -1162,6 +1162,370 @@ function renderWideSectionHeader(headerElement: HTMLElement, sectionName: string
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     });
+
+    const actionsSpan = document.createElement('span');
+    actionsSpan.className = 'section-actions';
+    headerElement.appendChild(actionsSpan);
+
+    // Move up button
+    const moveUpButton = document.createElement('span');
+    moveUpButton.innerHTML = '⬆️';
+    moveUpButton.title = 'Move section up';
+    moveUpButton.style.marginRight = '2px';
+    actionsSpan.appendChild(moveUpButton);
+
+    // Move down button
+    const moveDownButton = document.createElement('span');
+    moveDownButton.innerHTML = '⬇️';
+    moveDownButton.title = 'Move section down';
+    moveDownButton.style.marginRight = '2px';
+    actionsSpan.appendChild(moveDownButton);
+
+    // Edit button
+    const editButton = document.createElement('span');
+    editButton.innerHTML = '✏️';
+    editButton.title = 'Edit section name';
+    editButton.style.marginRight = '2px';
+    actionsSpan.appendChild(editButton);
+
+    // Delete button
+    const deleteButton = document.createElement('span');
+    deleteButton.innerHTML = '<span class="delete-icon">×</span>';
+    deleteButton.title = 'Delete section';
+    deleteButton.style.marginLeft = '2px';
+    actionsSpan.appendChild(deleteButton);
+
+    // Double-click to edit section name
+    headerElement.addEventListener('dblclick', () => {
+        editSectionName(headerElement, sectionName);
+    });
+
+    moveUpButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        moveSectionUp(sectionName);
+    });
+
+    moveDownButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        moveSectionDown(sectionName);
+    });
+
+    editButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        editSectionName(headerElement, sectionName);
+    });
+
+    deleteButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteSection(sectionName);
+    });
+
+    // Enhanced drop target handling for all sections (empty and non-empty)
+    // This works in conjunction with SortableJS
+    headerElement.addEventListener('dragover', (e) => {
+        // Only handle if this is a tab being dragged (not a section)
+        if (currentDraggedTabId) {
+            e.preventDefault();
+            e.stopPropagation();
+            headerElement.classList.add('drag-over');
+        }
+    });
+
+    headerElement.addEventListener('dragleave', (e) => {
+        // Only remove drag-over if we're not moving to a child element
+        if (!headerElement.contains(e.relatedTarget as Node)) {
+            headerElement.classList.remove('drag-over');
+        }
+    });
+
+    headerElement.addEventListener('drop', (e) => {
+        // Only handle if this is a tab being dragged (not a section)
+        if (currentDraggedTabId) {
+            e.preventDefault();
+            e.stopPropagation();
+            headerElement.classList.remove('drag-over');
+
+            // Force the tab to be assigned to this section
+            const tab = tabs.find(t => t.id === currentDraggedTabId);
+            if (tab && tab.section !== sectionName) {
+
+                tab.section = sectionName;
+
+                // Add section if it doesn't exist
+                if (!sections.includes(sectionName) && sectionName !== 'Unsorted') {
+                    sections.push(sectionName);
+                    saveSections();
+                }
+
+                saveTabs();
+                renderAllTabs();
+            }
+        }
+    });
+
+    // Add a drag handle for section reordering
+    const dragHandle = document.createElement('span');
+    dragHandle.innerHTML = '⋮⋮';
+    dragHandle.title = 'Drag to reorder section';
+    dragHandle.style.cssText = `
+        position: absolute;
+        left: 2px;
+        top: 50%;
+        transform: translateY(-50%);
+        cursor: grab;
+        opacity: 0.5;
+        font-size: 12px;
+        line-height: 1;
+        user-select: none;
+    `;
+    headerElement.appendChild(dragHandle);
+
+    // Add color circle next to drag handle
+    const colorCircle = document.createElement('div');
+    colorCircle.className = 'section-color-circle';
+    colorCircle.title = 'Click to change section color';
+    const currentColor = getSectionColor(sectionName);
+    colorCircle.style.cssText = `
+        position: absolute;
+        left: 18px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: ${currentColor || 'transparent'};
+        border: 1px solid var(--border-color);
+        cursor: pointer;
+        z-index: 1000;
+        transition: all 0.2s ease;
+    `;
+    
+    // Color circle hover effect
+    colorCircle.addEventListener('mouseenter', () => {
+        colorCircle.style.transform = 'translateY(-50%) scale(1.2)';
+        colorCircle.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+    });
+    
+    colorCircle.addEventListener('mouseleave', () => {
+        colorCircle.style.transform = 'translateY(-50%) scale(1)';
+        colorCircle.style.boxShadow = 'none';
+    });
+    
+    headerElement.appendChild(colorCircle);
+
+    // Create color dropdown
+    const colorDropdown = document.createElement('div');
+    colorDropdown.className = 'section-color-dropdown';
+    colorDropdown.style.cssText = `
+        position: absolute;
+        left: 18px;
+        top: calc(100% + 2px);
+        display: none;
+        z-index: 10000;
+        padding: 2px;
+        min-width: 24px;
+    `;
+    
+    // Initially hide the dropdown
+    colorDropdown.style.display = 'none';
+    
+    // Add color options to dropdown
+    colorOptions.forEach(colorOption => {
+        const colorSwatch = document.createElement('div');
+        const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
+        const swatchColor = isDarkTheme ? colorOption.dark : colorOption.light;
+        colorSwatch.className = 'color-dropdown-swatch';
+        colorSwatch.title = colorOption.name;
+        colorSwatch.style.cssText = `
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: ${swatchColor};
+            margin: 2px;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+            display: inline-block;
+        `;
+        
+        colorSwatch.addEventListener('mouseenter', () => {
+            colorSwatch.style.transform = 'scale(1.2)';
+            colorSwatch.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+        });
+        
+        colorSwatch.addEventListener('mouseleave', () => {
+            colorSwatch.style.transform = 'scale(1)';
+            colorSwatch.style.boxShadow = 'none';
+        });
+        
+        colorSwatch.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sectionColors[sectionName] = colorOption.name;
+            saveSectionColors();
+            
+            // Update the color circle
+            const newColor = getSectionColor(sectionName);
+            colorCircle.style.backgroundColor = newColor;
+            
+            // Hide dropdown
+            colorDropdown.style.display = 'none';
+            
+            // Re-render to update all instances
+            renderAllTabs();
+        });
+        
+        colorDropdown.appendChild(colorSwatch);
+    });
+    
+    // Add "No Color" option
+    const noColorSwatch = document.createElement('div');
+    noColorSwatch.className = 'color-dropdown-swatch';
+    noColorSwatch.title = 'No Color';
+    noColorSwatch.style.cssText = `
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: transparent;
+        margin: 2px;
+        cursor: pointer;
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+        display: inline-block;
+    `;
+    
+    noColorSwatch.addEventListener('mouseenter', () => {
+        noColorSwatch.style.transform = 'scale(1.2)';
+        noColorSwatch.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+    });
+    
+    noColorSwatch.addEventListener('mouseleave', () => {
+        noColorSwatch.style.transform = 'scale(1)';
+        noColorSwatch.style.boxShadow = 'none';
+    });
+    
+    noColorSwatch.addEventListener('click', (e) => {
+        e.stopPropagation();
+        delete sectionColors[sectionName];
+        saveSectionColors();
+        
+        // Update the color circle
+        colorCircle.style.backgroundColor = 'transparent';
+        
+        // Hide dropdown
+        colorDropdown.style.display = 'none';
+        
+        // Re-render to update all instances
+        renderAllTabs();
+    });
+    
+    colorDropdown.appendChild(noColorSwatch);
+    headerElement.appendChild(colorDropdown);
+    
+    // Color circle click handler to show/hide dropdown
+    colorCircle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        
+        // Hide all other dropdowns first
+        document.querySelectorAll('.section-color-dropdown').forEach(dropdown => {
+            if (dropdown !== colorDropdown) {
+                (dropdown as HTMLElement).style.display = 'none';
+            }
+        });
+        
+        // Toggle this dropdown
+        const isVisible = colorDropdown.style.display === 'flex';
+        colorDropdown.style.display = isVisible ? 'none' : 'flex';
+        
+        // Update color swatches in dropdown based on current theme
+        const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
+        const colorSwatches = colorDropdown.querySelectorAll('.color-dropdown-swatch');
+        colorSwatches.forEach((swatch, index) => {
+            if (index < colorOptions.length) {
+                const colorOption = colorOptions[index];
+                const swatchColor = isDarkTheme ? colorOption.dark : colorOption.light;
+                (swatch as HTMLElement).style.backgroundColor = swatchColor;
+            }
+        });
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!headerElement.contains(e.target as Node)) {
+            colorDropdown.style.display = 'none';
+        }
+    });
+
+    // Section drag functionality
+    dragHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        dragHandle.style.cursor = 'grabbing';
+        headerElement.style.opacity = '0.7';
+        headerElement.style.transform = 'scale(0.98)';
+
+        let startY = e.clientY;
+        let currentY = startY;
+
+        const onMouseMove = (e: MouseEvent) => {
+            currentY = e.clientY;
+            const deltaY = currentY - startY;
+
+            // Visual feedback
+            headerElement.style.transform = `scale(0.98) translateY(${deltaY}px)`;
+
+            // Find target section based on mouse position
+            const allSections = Array.from(document.querySelectorAll('.section-header'));
+            allSections.forEach(section => section.classList.remove('section-drop-target'));
+
+            // Find the section we're hovering over
+            for (const section of allSections) {
+                if (section === headerElement) continue;
+
+                const rect = section.getBoundingClientRect();
+                if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    section.classList.add('section-drop-target');
+                    break;
+                }
+            }
+        };
+
+        const onMouseUp = (e: MouseEvent) => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            // Find target section
+            const allSections = Array.from(document.querySelectorAll('.section-header'));
+            let targetSection = null;
+
+            for (const section of allSections) {
+                if (section === headerElement) continue;
+
+                const rect = section.getBoundingClientRect();
+                if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    targetSection = section;
+                    break;
+                }
+            }
+
+            if (targetSection) {
+                const targetSectionName = targetSection.getAttribute('data-section');
+                if (targetSectionName && targetSectionName !== sectionName) {
+
+                    reorderSections(sectionName, targetSectionName);
+                }
+            }
+
+            // Reset styles
+            dragHandle.style.cursor = 'grab';
+            headerElement.style.opacity = '1';
+            headerElement.style.transform = '';
+            allSections.forEach(section => section.classList.remove('section-drop-target'));
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
 }
 
 // Function to edit section name
