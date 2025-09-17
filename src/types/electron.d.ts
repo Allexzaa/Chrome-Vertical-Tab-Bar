@@ -15,6 +15,9 @@ interface ElectronAPI {
     minimizeWindow: () => void;
     maximizeWindow: () => void;
     closeWindow: () => void;
+    showDropdownPopup: (x: number, y: number, content: any) => void;
+    hideDropdownPopup: () => void;
+    onDropdownAction: (callback: (data: { action: string, sectionName: string }) => void) => void;
 }
 
 declare global {

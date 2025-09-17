@@ -2,6 +2,7 @@ import { app, BrowserWindow, screen, BrowserView, ipcMain, shell, Menu, Tray, di
 import * as path from 'path';
 
 let mainWindow: BrowserWindow | null = null;
+let dropdownPopup: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
 function createWindow() {
@@ -38,6 +39,8 @@ function createWindow() {
     // Show the window after it's fully loaded
     mainWindow.once('ready-to-show', () => {
         mainWindow?.show();
+        // Open dev tools for debugging
+        mainWindow?.webContents.openDevTools();
     });
 
     // Event handlers for the window
@@ -92,6 +95,139 @@ function createWindow() {
     ipcMain.on('close-window', () => {
         if (mainWindow) {
             mainWindow.close();
+        }
+    });
+
+    // Handle dropdown popup
+    ipcMain.on('show-dropdown-popup', (event, x: number, y: number, content: any) => {
+        if (dropdownPopup) {
+            dropdownPopup.close();
+        }
+
+        // Get main window position to calculate screen coordinates
+        const mainWindowBounds = mainWindow?.getBounds();
+        if (!mainWindowBounds) return;
+
+        // Calculate screen position: main window position + relative coordinates
+        const screenX = mainWindowBounds.x + x;
+        const screenY = mainWindowBounds.y + y;
+
+        console.log('Creating popup at screen coordinates:', {
+            mainWindowBounds,
+            relativeX: x,
+            relativeY: y,
+            screenX,
+            screenY
+        });
+
+        dropdownPopup = new BrowserWindow({
+            width: 28,   // Smaller width for smaller icons
+            height: 140, // Height for 6 smaller icons (20px each + gaps + padding)
+            x: screenX,
+            y: screenY,
+            frame: false,
+            alwaysOnTop: true,
+            resizable: false,
+            movable: false,
+            transparent: false,
+            hasShadow: true,
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false,
+                webSecurity: false
+            }
+        });
+
+        // Create HTML content for the popup (minimalistic - icons only)
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {
+                        margin: 0;
+                        padding: 3px;
+                        background: #ffffff;
+                        border: 1px solid #d0d0d0;
+                        border-radius: 4px;
+                        font-family: Arial, sans-serif;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                        display: flex;
+                        flex-direction: column;
+                        gap: 1px;
+                        overflow: hidden;
+                        height: 100vh;
+                        box-sizing: border-box;
+                    }
+                    .option-item {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 20px;
+                        height: 20px;
+                        cursor: pointer;
+                        border-radius: 2px;
+                        transition: background-color 0.2s ease;
+                        font-size: 11px;
+                        flex-shrink: 0;
+                    }
+                    .option-item:hover {
+                        background-color: #e0e0e0;
+                    }
+                    .option-item:active {
+                        background-color: #d0d0d0;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="option-item" onclick="sendAction('color')" title="Change color">🎨</div>
+                <div class="option-item" onclick="sendAction('moveUp')" title="Move up">⬆️</div>
+                <div class="option-item" onclick="sendAction('moveDown')" title="Move down">⬇️</div>
+                <div class="option-item" onclick="sendAction('edit')" title="Edit name">✏️</div>
+                <div class="option-item" onclick="sendAction('delete')" title="Delete section">×</div>
+                <script>
+                    const { ipcRenderer } = require('electron');
+                    const sectionName = '${content.sectionName}';
+                    
+                    function sendAction(action) {
+                        ipcRenderer.send('dropdown-action', { action, sectionName });
+                        window.close();
+                    }
+                </script>
+            </body>
+            </html>
+        `;
+
+        dropdownPopup.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+
+        dropdownPopup.on('closed', () => {
+            dropdownPopup = null;
+        });
+
+        // Auto-close when clicking outside
+        dropdownPopup.on('blur', () => {
+            if (dropdownPopup) {
+                dropdownPopup.close();
+            }
+        });
+    });
+
+    ipcMain.on('hide-dropdown-popup', () => {
+        if (dropdownPopup) {
+            dropdownPopup.close();
+        }
+    });
+
+    // Handle dropdown actions from popup window
+    ipcMain.on('dropdown-action', (event, data) => {
+        // Forward the action to the main renderer window
+        if (mainWindow) {
+            mainWindow.webContents.send('execute-dropdown-action', data);
+        }
+        
+        // Close the popup
+        if (dropdownPopup) {
+            dropdownPopup.close();
         }
     });
 

@@ -372,7 +372,7 @@ function setWidthGlobal(width: number) {
 
     // Store the width
     localStorage.setItem('tabBarWidth', boundedWidth.toString());
-    
+
     // Re-render sections to apply responsive design
     renderAllTabs();
 }
@@ -426,7 +426,7 @@ function initializeResize(container: HTMLElement) {
 
         // Store the width
         localStorage.setItem('tabBarWidth', boundedWidth.toString());
-        
+
         // Re-render sections to apply responsive design
         renderAllTabs();
     }
@@ -492,22 +492,56 @@ function initializeResize(container: HTMLElement) {
     // Listen for window resize events from main process
     window.electronAPI.onWindowResized((width: number) => {
         currentWidth = width;
-        
+
         // Update DOM elements to match the new width
         const appRoot = document.getElementById('app-root');
         requestAnimationFrame(() => {
             if (appRoot) appRoot.style.width = `${width}px`;
             container.style.width = '100%';
             document.body.style.width = `${width}px`;
-            
+
             // Ensure consistent background
             document.body.style.background = 'var(--bg-color)';
             container.style.background = 'var(--bg-color)';
             if (appRoot) appRoot.style.background = 'var(--bg-color)';
         });
-        
+
         // Store the width
         localStorage.setItem('tabBarWidth', width.toString());
+    });
+
+    // Listen for dropdown actions from popup window
+    window.electronAPI.onDropdownAction((data: { action: string, sectionName: string }) => {
+        const { action, sectionName } = data;
+        
+        switch (action) {
+            case 'drag':
+                // Enable drag mode - show a message or highlight draggable areas
+                alert('Drag mode: You can now drag this section header to reorder it');
+                break;
+            case 'color':
+                // Find the section header and show color options
+                const headerElement = document.querySelector(`[data-section="${sectionName}"]`) as HTMLElement;
+                if (headerElement) {
+                    showColorDropdown(headerElement, sectionName);
+                }
+                break;
+            case 'moveUp':
+                moveSectionUp(sectionName);
+                break;
+            case 'moveDown':
+                moveSectionDown(sectionName);
+                break;
+            case 'edit':
+                const editHeaderElement = document.querySelector(`[data-section="${sectionName}"]`) as HTMLElement;
+                if (editHeaderElement) {
+                    editSectionName(editHeaderElement, sectionName);
+                }
+                break;
+            case 'delete':
+                deleteSection(sectionName);
+                break;
+        }
     });
 
     // Update window size to match current width
@@ -542,6 +576,8 @@ function renderSectionHeader(sectionName: string, isEmpty: boolean = false) {
     // Check if we're in two-column mode
     const isNarrow = isTwoColumnMode();
 
+
+
     if (isNarrow) {
         // Two-column mode: Show hamburger menu on left
         renderNarrowSectionHeader(headerElement, sectionName, isEmpty);
@@ -552,7 +588,7 @@ function renderSectionHeader(sectionName: string, isEmpty: boolean = false) {
 
     // Add common event handlers
     addSectionEventHandlers(headerElement, sectionName);
-    
+
     tabContainer.appendChild(headerElement);
 }
 
@@ -561,9 +597,7 @@ function createSectionOptionsDropdown(headerElement: HTMLElement, sectionName: s
     const dropdown = document.createElement('div');
     dropdown.className = 'section-options-dropdown';
     dropdown.style.cssText = `
-        position: absolute;
-        left: 2px;
-        top: 100%;
+        position: fixed;
         background: var(--bg-color);
         border: 1px solid var(--border-color);
         border-radius: 4px;
@@ -573,6 +607,8 @@ function createSectionOptionsDropdown(headerElement: HTMLElement, sectionName: s
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         min-width: 120px;
     `;
+
+
 
     // Create option items
     const options = [
@@ -620,7 +656,7 @@ function createSectionOptionsDropdown(headerElement: HTMLElement, sectionName: s
         optionItem.addEventListener('click', (e) => {
             e.stopPropagation();
             dropdown.style.display = 'none';
-            
+
             switch (option.action) {
                 case 'drag':
                     // Enable drag mode - this would need special handling
@@ -646,18 +682,31 @@ function createSectionOptionsDropdown(headerElement: HTMLElement, sectionName: s
         dropdown.appendChild(optionItem);
     });
 
+
     return dropdown;
 }
 
 // Function to show color dropdown in narrow mode
 function showColorDropdown(headerElement: HTMLElement, sectionName: string) {
+    // Find the options dropdown to position color dropdown next to it
+    const optionsDropdown = document.querySelector('.section-options-dropdown[style*="block"]') as HTMLElement;
+    const windowRect = document.body.getBoundingClientRect();
+    let colorDropdownLeft = windowRect.right + 130; // Default fallback
+    let colorDropdownTop = 50; // Default fallback
+
+    if (optionsDropdown) {
+        const optionsRect = optionsDropdown.getBoundingClientRect();
+        colorDropdownLeft = optionsRect.right + 5; // Position to the right of options dropdown
+        colorDropdownTop = optionsRect.top; // Align with top of options dropdown
+    }
+
     // Create temporary color dropdown
     const colorDropdown = document.createElement('div');
     colorDropdown.className = 'section-color-dropdown-narrow';
     colorDropdown.style.cssText = `
-        position: absolute;
-        left: 2px;
-        top: 100%;
+        position: fixed;
+        left: ${colorDropdownLeft}px;
+        top: ${colorDropdownTop}px;
         display: block;
         z-index: 10001;
         padding: 4px;
@@ -688,14 +737,14 @@ function showColorDropdown(headerElement: HTMLElement, sectionName: string) {
             e.stopPropagation();
             sectionColors[sectionName] = colorOption.name;
             saveSectionColors();
-            
+
             // Update section header color
             const newColor = getSectionColor(sectionName);
             if (newColor && newColor !== 'transparent') {
                 headerElement.style.backgroundColor = newColor;
                 headerElement.style.color = 'white';
             }
-            
+
             // Remove dropdown
             colorDropdown.remove();
             renderAllTabs();
@@ -722,16 +771,16 @@ function showColorDropdown(headerElement: HTMLElement, sectionName: string) {
         e.stopPropagation();
         delete sectionColors[sectionName];
         saveSectionColors();
-        
+
         headerElement.style.backgroundColor = '';
         headerElement.style.color = '';
-        
+
         colorDropdown.remove();
         renderAllTabs();
     });
 
     colorDropdown.appendChild(noColorSwatch);
-    headerElement.appendChild(colorDropdown);
+    document.body.appendChild(colorDropdown);
 
     // Remove dropdown when clicking outside
     setTimeout(() => {
@@ -790,6 +839,8 @@ function addSectionEventHandlers(headerElement: HTMLElement, sectionName: string
 
 // Function to render section header in narrow (two-column) mode
 function renderNarrowSectionHeader(headerElement: HTMLElement, sectionName: string, isEmpty: boolean) {
+
+
     // Create hamburger menu icon
     const hamburgerIcon = document.createElement('div');
     hamburgerIcon.className = 'section-hamburger-menu';
@@ -801,13 +852,16 @@ function renderNarrowSectionHeader(headerElement: HTMLElement, sectionName: stri
         top: 50%;
         transform: translateY(-50%);
         cursor: pointer;
-        font-size: 12px;
+        font-size: 14px;
         color: var(--text-color);
         z-index: 1000;
-        padding: 2px;
+        padding: 4px;
         border-radius: 2px;
         transition: all 0.2s ease;
+        background: rgba(0,0,0,0.1);
     `;
+
+
 
     hamburgerIcon.addEventListener('mouseenter', () => {
         hamburgerIcon.style.backgroundColor = 'var(--tab-hover)';
@@ -819,6 +873,7 @@ function renderNarrowSectionHeader(headerElement: HTMLElement, sectionName: stri
 
     headerElement.appendChild(hamburgerIcon);
 
+
     // Create title span with left margin to avoid overlap
     const titleSpan = document.createElement('span');
     titleSpan.textContent = isEmpty ? `${sectionName} (Drop tabs here)` : sectionName;
@@ -827,12 +882,13 @@ function renderNarrowSectionHeader(headerElement: HTMLElement, sectionName: stri
 
     // Create dropdown menu for all options
     const optionsDropdown = createSectionOptionsDropdown(headerElement, sectionName);
-    headerElement.appendChild(optionsDropdown);
+    document.body.appendChild(optionsDropdown);
 
     // Hamburger click handler
     hamburgerIcon.addEventListener('click', (e) => {
+
         e.stopPropagation();
-        
+
         // Hide all other dropdowns
         document.querySelectorAll('.section-options-dropdown').forEach(dropdown => {
             if (dropdown !== optionsDropdown) {
@@ -842,12 +898,27 @@ function renderNarrowSectionHeader(headerElement: HTMLElement, sectionName: stri
 
         // Toggle this dropdown
         const isVisible = optionsDropdown.style.display === 'block';
-        optionsDropdown.style.display = isVisible ? 'none' : 'block';
+
+        if (isVisible) {
+            optionsDropdown.style.display = 'none';
+        } else {
+            // Calculate screen position for popup window
+            const hamburgerRect = hamburgerIcon.getBoundingClientRect();
+
+            // Position popup window to the right-down of the hamburger icon
+            const popupX = Math.round(hamburgerRect.right + 5); // 5px to the right of the icon
+            const popupY = Math.round(hamburgerRect.bottom + 2); // 2px below the icon
+
+            // Show popup window outside the main window
+            window.electronAPI.showDropdownPopup(popupX, popupY, {
+                sectionName: sectionName
+            });
+        }
     });
 
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
-        if (!headerElement.contains(e.target as Node)) {
+        if (!headerElement.contains(e.target as Node) && !optionsDropdown.contains(e.target as Node)) {
             optionsDropdown.style.display = 'none';
         }
     });
@@ -948,18 +1019,18 @@ function renderWideSectionHeader(headerElement: HTMLElement, sectionName: string
         z-index: 1000;
         transition: all 0.2s ease;
     `;
-    
+
     // Color circle hover effect
     colorCircle.addEventListener('mouseenter', () => {
         colorCircle.style.transform = 'translateY(-50%) scale(1.2)';
         colorCircle.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
     });
-    
+
     colorCircle.addEventListener('mouseleave', () => {
         colorCircle.style.transform = 'translateY(-50%) scale(1)';
         colorCircle.style.boxShadow = 'none';
     });
-    
+
     headerElement.appendChild(colorCircle);
 
     // Create color dropdown (existing functionality)
@@ -973,7 +1044,7 @@ function renderWideSectionHeader(headerElement: HTMLElement, sectionName: string
         z-index: 10000;
         padding: 2px;
     `;
-    
+
     // Add color options to dropdown
     colorOptions.forEach(colorOption => {
         const colorSwatch = document.createElement('div');
@@ -992,36 +1063,36 @@ function renderWideSectionHeader(headerElement: HTMLElement, sectionName: string
             transition: all 0.2s ease;
             display: inline-block;
         `;
-        
+
         colorSwatch.addEventListener('mouseenter', () => {
             colorSwatch.style.transform = 'scale(1.2)';
             colorSwatch.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
         });
-        
+
         colorSwatch.addEventListener('mouseleave', () => {
             colorSwatch.style.transform = 'scale(1)';
             colorSwatch.style.boxShadow = 'none';
         });
-        
+
         colorSwatch.addEventListener('click', (e) => {
             e.stopPropagation();
             sectionColors[sectionName] = colorOption.name;
             saveSectionColors();
-            
+
             // Update the color circle
             const newColor = getSectionColor(sectionName);
             colorCircle.style.backgroundColor = newColor;
-            
+
             // Hide dropdown
             colorDropdown.style.display = 'none';
-            
+
             // Re-render to update all instances
             renderAllTabs();
         });
-        
+
         colorDropdown.appendChild(colorSwatch);
     });
-    
+
     // Add "No Color" option
     const noColorSwatch = document.createElement('div');
     noColorSwatch.className = 'color-dropdown-swatch';
@@ -1037,50 +1108,50 @@ function renderWideSectionHeader(headerElement: HTMLElement, sectionName: string
         transition: all 0.2s ease;
         display: inline-block;
     `;
-    
+
     noColorSwatch.addEventListener('mouseenter', () => {
         noColorSwatch.style.transform = 'scale(1.2)';
         noColorSwatch.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
     });
-    
+
     noColorSwatch.addEventListener('mouseleave', () => {
         noColorSwatch.style.transform = 'scale(1)';
         noColorSwatch.style.boxShadow = 'none';
     });
-    
+
     noColorSwatch.addEventListener('click', (e) => {
         e.stopPropagation();
         delete sectionColors[sectionName];
         saveSectionColors();
-        
+
         // Update the color circle
         colorCircle.style.backgroundColor = 'transparent';
-        
+
         // Hide dropdown
         colorDropdown.style.display = 'none';
-        
+
         // Re-render to update all instances
         renderAllTabs();
     });
-    
+
     colorDropdown.appendChild(noColorSwatch);
     headerElement.appendChild(colorDropdown);
-    
+
     // Color circle click handler to show/hide dropdown
     colorCircle.addEventListener('click', (e) => {
         e.stopPropagation();
-        
+
         // Hide all other dropdowns first
         document.querySelectorAll('.section-color-dropdown').forEach(dropdown => {
             if (dropdown !== colorDropdown) {
                 (dropdown as HTMLElement).style.display = 'none';
             }
         });
-        
+
         // Toggle this dropdown
         const isVisible = colorDropdown.style.display === 'block';
         colorDropdown.style.display = isVisible ? 'none' : 'block';
-        
+
         // Update color swatches in dropdown based on current theme
         const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
         const colorSwatches = colorDropdown.querySelectorAll('.color-dropdown-swatch');
@@ -1092,7 +1163,7 @@ function renderWideSectionHeader(headerElement: HTMLElement, sectionName: string
             }
         });
     });
-    
+
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
         if (!headerElement.contains(e.target as Node)) {
@@ -1377,7 +1448,7 @@ function getSectionFromPosition(clientY: number): string | null {
         // If we're above or within this header, it's our target
         if (clientY <= headerRect.bottom + 50) { // Add some buffer below header
             const sectionName = header.getAttribute('data-section');
-            console.log(`📍 Position ${clientY} maps to section: ${sectionName}`);
+
             return sectionName || 'Unsorted';
         }
     }
@@ -1385,7 +1456,7 @@ function getSectionFromPosition(clientY: number): string | null {
     // If we're below all headers, use the last section
     const lastHeader = sortedHeaders[sortedHeaders.length - 1];
     const lastSectionName = lastHeader.getAttribute('data-section') || 'Unsorted';
-    console.log(`📍 Below all headers, using last section: ${lastSectionName}`);
+
     return lastSectionName;
 }
 
@@ -1627,10 +1698,10 @@ function loadSectionColors() {
 function getSectionColor(sectionName: string): string {
     const colorName = sectionColors[sectionName];
     if (!colorName) return 'transparent';
-    
+
     const colorOption = colorOptions.find(opt => opt.name === colorName);
     if (!colorOption) return 'transparent';
-    
+
     // Check if we're in dark theme
     const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
     return isDarkTheme ? colorOption.dark : colorOption.light;
@@ -1656,7 +1727,7 @@ function loadTabs() {
     } else {
         console.log('📁 No saved sections found');
     }
-    
+
     // Load section colors
     loadSectionColors();
 
@@ -2081,16 +2152,16 @@ class ThemeManager {
         const themeButton = document.getElementById('theme-toggle');
         if (themeButton) {
             // Use CSS-styled icons for better contrast
-            themeButton.innerHTML = this.currentTheme === 'light' ? 
-                '<span class="theme-icon moon">🌙</span>' : 
+            themeButton.innerHTML = this.currentTheme === 'light' ?
+                '<span class="theme-icon moon">🌙</span>' :
                 '<span class="theme-icon sun">☀️</span>';
             themeButton.title = `Switch to ${this.currentTheme === 'light' ? 'dark' : 'light'} mode`;
         }
-        
+
         // Update section colors when theme changes
         this.updateSectionColors();
     }
-    
+
     private updateSectionColors(): void {
         // Update all section color circles and headers
         document.querySelectorAll('.section-color-circle').forEach(circle => {
@@ -2100,7 +2171,7 @@ class ThemeManager {
                 if (sectionName) {
                     const newColor = getSectionColor(sectionName);
                     (circle as HTMLElement).style.backgroundColor = newColor || 'transparent';
-                    
+
                     // Update section header color
                     if (newColor && newColor !== 'transparent') {
                         header.style.backgroundColor = newColor;
@@ -2112,7 +2183,7 @@ class ThemeManager {
                 }
             }
         });
-        
+
         // Update color swatches in any open dropdowns
         document.querySelectorAll('.section-color-dropdown').forEach(dropdown => {
             const colorSwatches = dropdown.querySelectorAll('.color-dropdown-swatch');

@@ -17,6 +17,11 @@ contextBridge.exposeInMainWorld(
             ipcRenderer.on('move-tab-to-section', (_, tabId, section) => callback(tabId, section)),
         minimizeWindow: () => ipcRenderer.send('minimize-window'),
         maximizeWindow: () => ipcRenderer.send('maximize-window'),
-        closeWindow: () => ipcRenderer.send('close-window')
+        closeWindow: () => ipcRenderer.send('close-window'),
+        showDropdownPopup: (x: number, y: number, content: any) => ipcRenderer.send('show-dropdown-popup', x, y, content),
+        hideDropdownPopup: () => ipcRenderer.send('hide-dropdown-popup'),
+        onDropdownAction: (callback: (data: { action: string, sectionName: string }) => void) => {
+            ipcRenderer.on('execute-dropdown-action', (event, data) => callback(data));
+        }
     }
 );
