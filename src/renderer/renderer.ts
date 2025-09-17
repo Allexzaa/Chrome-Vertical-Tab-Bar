@@ -347,9 +347,9 @@ function initializeApp() {
 let isResizing = false;
 let currentWidth = 90; // Default width for two columns with smaller tabs
 
-// Function to check if we're in two-column mode (narrow width)
+// Function to check if we're in narrow mode (3 tabs width or less)
 function isTwoColumnMode(): boolean {
-    return currentWidth <= 120; // Threshold for two-column mode
+    return currentWidth <= 159; // Threshold for 3-tab width mode (shows hamburger menu)
 }
 
 // Function to update window control button sizes based on width
@@ -2139,7 +2139,7 @@ function showSectionModal(tabId?: string, clickX?: number, clickY?: number) {
 
     // Use a more reliable positioning approach
     // For debugging: if in wide mode, use a simple visible position
-    const isWideMode = currentWidth > 120;
+    const isWideMode = currentWidth > 159;
     const debugLeft = isWideMode ? 150 : left; // Force visible position in wide mode
     const debugTop = isWideMode ? 100 : top;   // Force visible position in wide mode
 

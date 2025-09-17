@@ -14,7 +14,7 @@ A modern, responsive vertical tab bar application for Windows, built with Electr
 ### 📱 Responsive Design
 - **Adaptive Layout**: Automatically switches between wide and narrow modes
 - **Smart Spacing**: Window controls compress in narrow mode to maximize space
-- **Two-Column Mode**: Efficient tab arrangement for narrow widths (≤120px)
+- **Three-Tab Mode**: Hamburger menu appears when window fits 3 tabs or fewer (≤159px)
 - **Dynamic Sizing**: All UI elements scale appropriately with window size
 
 ### 🎯 Tab Management
@@ -137,8 +137,8 @@ The VBS script provides silent execution without showing command windows:
 4. **Visual Organization**: Sections display with chosen background colors
 
 ### Responsive Features
-- **Narrow Mode** (≤120px): Compact layout with smaller controls
-- **Wide Mode** (>120px): Full-featured layout with all options visible
+- **Narrow Mode** (≤159px): Compact layout with hamburger menu and smaller controls
+- **Wide Mode** (>159px): Full-featured layout with all options visible
 - **Automatic Adaptation**: UI elements resize and reposition automatically
 
 ### Window Controls
