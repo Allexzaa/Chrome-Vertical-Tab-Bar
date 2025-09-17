@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld(
         closeWindow: () => ipcRenderer.send('close-window'),
         showDropdownPopup: (x: number, y: number, content: any) => ipcRenderer.send('show-dropdown-popup', x, y, content),
         hideDropdownPopup: () => ipcRenderer.send('hide-dropdown-popup'),
-        onDropdownAction: (callback: (data: { action: string, sectionName: string }) => void) => {
+        onDropdownAction: (callback: (data: { action: string, sectionName: string, colorName?: string }) => void) => {
             ipcRenderer.on('execute-dropdown-action', (event, data) => callback(data));
         }
     }

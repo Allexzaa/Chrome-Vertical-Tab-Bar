@@ -324,6 +324,10 @@ function initializeApp() {
             const target = e.target as HTMLElement;
             if (target === tabContainer || target.id === 'tab-container') {
                 e.preventDefault();
+                // Store click coordinates for modal positioning
+                (window as any).lastClickX = e.clientX;
+                (window as any).lastClickY = e.clientY;
+                console.log('Stored click coordinates:', { x: e.clientX, y: e.clientY });
                 window.electronAPI.showEmptySpaceContextMenu();
             }
         });
@@ -511,20 +515,20 @@ function initializeResize(container: HTMLElement) {
     });
 
     // Listen for dropdown actions from popup window
-    window.electronAPI.onDropdownAction((data: { action: string, sectionName: string }) => {
-        const { action, sectionName } = data;
-        
+    window.electronAPI.onDropdownAction((data: { action: string, sectionName: string, colorName?: string }) => {
+        const { action, sectionName, colorName } = data;
+
         switch (action) {
-            case 'drag':
-                // Enable drag mode - show a message or highlight draggable areas
-                alert('Drag mode: You can now drag this section header to reorder it');
-                break;
-            case 'color':
-                // Find the section header and show color options
-                const headerElement = document.querySelector(`[data-section="${sectionName}"]`) as HTMLElement;
-                if (headerElement) {
-                    showColorDropdown(headerElement, sectionName);
+            case 'setColor':
+                if (colorName === 'none') {
+                    // Remove color
+                    delete sectionColors[sectionName];
+                } else if (colorName) {
+                    // Set color
+                    sectionColors[sectionName] = colorName;
                 }
+                saveSectionColors();
+                renderAllTabs();
                 break;
             case 'moveUp':
                 moveSectionUp(sectionName);
@@ -533,9 +537,14 @@ function initializeResize(container: HTMLElement) {
                 moveSectionDown(sectionName);
                 break;
             case 'edit':
+                console.log('Edit action triggered for section:', sectionName);
                 const editHeaderElement = document.querySelector(`[data-section="${sectionName}"]`) as HTMLElement;
+                console.log('Found header element:', editHeaderElement);
                 if (editHeaderElement) {
+                    console.log('Calling editSectionName...');
                     editSectionName(editHeaderElement, sectionName);
+                } else {
+                    console.error('Could not find header element for section:', sectionName);
                 }
                 break;
             case 'delete':
@@ -599,7 +608,7 @@ function createSectionOptionsDropdown(headerElement: HTMLElement, sectionName: s
     dropdown.style.cssText = `
         position: fixed;
         background: var(--bg-color);
-        border: 1px solid var(--border-color);
+        border: none;
         border-radius: 4px;
         padding: 4px;
         display: none;
@@ -610,9 +619,8 @@ function createSectionOptionsDropdown(headerElement: HTMLElement, sectionName: s
 
 
 
-    // Create option items
+    // Create option items (removed drag toggle since hamburger is now draggable)
     const options = [
-        { icon: '⋮⋮', label: 'Drag to reorder', action: 'drag' },
         { icon: '🎨', label: 'Change color', action: 'color' },
         { icon: '⬆️', label: 'Move up', action: 'moveUp' },
         { icon: '⬇️', label: 'Move down', action: 'moveDown' },
@@ -658,9 +666,6 @@ function createSectionOptionsDropdown(headerElement: HTMLElement, sectionName: s
             dropdown.style.display = 'none';
 
             switch (option.action) {
-                case 'drag':
-                    // Enable drag mode - this would need special handling
-                    break;
                 case 'color':
                     showColorDropdown(headerElement, sectionName);
                     break;
@@ -700,7 +705,7 @@ function showColorDropdown(headerElement: HTMLElement, sectionName: string) {
         colorDropdownTop = optionsRect.top; // Align with top of options dropdown
     }
 
-    // Create temporary color dropdown
+    // Create temporary color dropdown container
     const colorDropdown = document.createElement('div');
     colorDropdown.className = 'section-color-dropdown-narrow';
     colorDropdown.style.cssText = `
@@ -714,21 +719,47 @@ function showColorDropdown(headerElement: HTMLElement, sectionName: string) {
         border: 1px solid var(--border-color);
         border-radius: 4px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
     `;
 
-    // Add color options
+    // Create color palette icon
+    const colorIcon = document.createElement('div');
+    colorIcon.innerHTML = '🎨';
+    colorIcon.title = 'Click to show/hide colors';
+    colorIcon.style.cssText = `
+        cursor: pointer;
+        font-size: 10px;
+        padding: 2px 4px;
+        border-radius: 2px;
+        transition: all 0.2s ease;
+        user-select: none;
+    `;
+
+    // Create colors container (initially hidden)
+    const colorsContainer = document.createElement('div');
+    colorsContainer.className = 'colors-container';
+    colorsContainer.style.cssText = `
+        display: none;
+        margin-left: 4px;
+        transition: all 0.3s ease;
+        opacity: 0;
+        transform: translateX(-10px);
+    `;
+
+    // Add color options to container
     colorOptions.forEach(colorOption => {
         const colorSwatch = document.createElement('div');
         const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
         const swatchColor = isDarkTheme ? colorOption.dark : colorOption.light;
         colorSwatch.style.cssText = `
-            width: 16px;
-            height: 16px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             background-color: ${swatchColor};
-            margin: 2px;
+            margin: 1px;
             cursor: pointer;
-            border: 2px solid var(--border-color);
+            border: 1px solid var(--border-color);
             transition: all 0.2s ease;
             display: inline-block;
         `;
@@ -750,19 +781,19 @@ function showColorDropdown(headerElement: HTMLElement, sectionName: string) {
             renderAllTabs();
         });
 
-        colorDropdown.appendChild(colorSwatch);
+        colorsContainer.appendChild(colorSwatch);
     });
 
     // Add "No Color" option
     const noColorSwatch = document.createElement('div');
     noColorSwatch.style.cssText = `
-        width: 16px;
-        height: 16px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         background-color: transparent;
-        margin: 2px;
+        margin: 1px;
         cursor: pointer;
-        border: 2px solid var(--border-color);
+        border: 1px solid var(--border-color);
         transition: all 0.2s ease;
         display: inline-block;
     `;
@@ -779,7 +810,44 @@ function showColorDropdown(headerElement: HTMLElement, sectionName: string) {
         renderAllTabs();
     });
 
-    colorDropdown.appendChild(noColorSwatch);
+    colorsContainer.appendChild(noColorSwatch);
+
+    // Color icon click handler to toggle colors
+    let colorsVisible = false;
+    colorIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+
+        if (!colorsVisible) {
+            // Show colors
+            colorsContainer.style.display = 'inline-block';
+            setTimeout(() => {
+                colorsContainer.style.opacity = '1';
+                colorsContainer.style.transform = 'translateX(0)';
+            }, 10);
+            colorsVisible = true;
+        } else {
+            // Hide colors
+            colorsContainer.style.opacity = '0';
+            colorsContainer.style.transform = 'translateX(-10px)';
+            setTimeout(() => {
+                colorsContainer.style.display = 'none';
+            }, 300);
+            colorsVisible = false;
+        }
+    });
+
+    // Add hover effect to color icon
+    colorIcon.addEventListener('mouseenter', () => {
+        colorIcon.style.backgroundColor = 'var(--tab-hover)';
+    });
+
+    colorIcon.addEventListener('mouseleave', () => {
+        colorIcon.style.backgroundColor = 'transparent';
+    });
+
+    // Append elements
+    colorDropdown.appendChild(colorIcon);
+    colorDropdown.appendChild(colorsContainer);
     document.body.appendChild(colorDropdown);
 
     // Remove dropdown when clicking outside
@@ -802,7 +870,9 @@ function addSectionEventHandlers(headerElement: HTMLElement, sectionName: string
 
     // Enhanced drop target handling for all sections (empty and non-empty)
     headerElement.addEventListener('dragover', (e) => {
-        if (currentDraggedTabId) {
+        const isSectionDrag = e.dataTransfer?.types.includes('section-drag');
+
+        if (currentDraggedTabId || isSectionDrag) {
             e.preventDefault();
             e.stopPropagation();
             headerElement.classList.add('drag-over');
@@ -816,11 +886,20 @@ function addSectionEventHandlers(headerElement: HTMLElement, sectionName: string
     });
 
     headerElement.addEventListener('drop', (e) => {
-        if (currentDraggedTabId) {
-            e.preventDefault();
-            e.stopPropagation();
-            headerElement.classList.remove('drag-over');
+        e.preventDefault();
+        e.stopPropagation();
+        headerElement.classList.remove('drag-over');
 
+        const isSectionDrag = e.dataTransfer?.types.includes('section-drag');
+
+        if (isSectionDrag) {
+            // Handle section reordering
+            const draggedSectionName = e.dataTransfer?.getData('text/plain');
+            if (draggedSectionName && draggedSectionName !== sectionName) {
+                reorderSections(draggedSectionName, sectionName);
+            }
+        } else if (currentDraggedTabId) {
+            // Handle tab moving to section
             const tab = tabs.find(t => t.id === currentDraggedTabId);
             if (tab && tab.section !== sectionName) {
                 tab.section = sectionName;
@@ -845,30 +924,45 @@ function renderNarrowSectionHeader(headerElement: HTMLElement, sectionName: stri
     const hamburgerIcon = document.createElement('div');
     hamburgerIcon.className = 'section-hamburger-menu';
     hamburgerIcon.innerHTML = '☰';
-    hamburgerIcon.title = 'Section options';
+    hamburgerIcon.title = 'Drag to reorder or click for options';
+    hamburgerIcon.draggable = true;
     hamburgerIcon.style.cssText = `
         position: absolute;
         left: 2px;
         top: 50%;
         transform: translateY(-50%);
-        cursor: pointer;
+        cursor: grab;
         font-size: 14px;
         color: var(--text-color);
         z-index: 1000;
         padding: 4px;
         border-radius: 2px;
         transition: all 0.2s ease;
-        background: rgba(0,0,0,0.1);
+        background: transparent;
     `;
 
-
-
     hamburgerIcon.addEventListener('mouseenter', () => {
-        hamburgerIcon.style.backgroundColor = 'var(--tab-hover)';
+        hamburgerIcon.style.opacity = '0.7';
     });
 
     hamburgerIcon.addEventListener('mouseleave', () => {
-        hamburgerIcon.style.backgroundColor = 'transparent';
+        hamburgerIcon.style.opacity = '1';
+    });
+
+    // Add drag functionality to hamburger icon
+    hamburgerIcon.addEventListener('dragstart', (e) => {
+        e.stopPropagation();
+        hamburgerIcon.style.cursor = 'grabbing';
+        headerElement.classList.add('dragging-section');
+
+        // Store section name for drag operation
+        e.dataTransfer?.setData('text/plain', sectionName);
+        e.dataTransfer?.setData('section-drag', 'true');
+    });
+
+    hamburgerIcon.addEventListener('dragend', (e) => {
+        hamburgerIcon.style.cursor = 'grab';
+        headerElement.classList.remove('dragging-section');
     });
 
     headerElement.appendChild(hamburgerIcon);
@@ -1053,8 +1147,8 @@ function renderWideSectionHeader(headerElement: HTMLElement, sectionName: string
         colorSwatch.className = 'color-dropdown-swatch';
         colorSwatch.title = colorOption.name;
         colorSwatch.style.cssText = `
-            width: 16px;
-            height: 16px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
             background-color: ${swatchColor};
             margin: 2px;
@@ -1098,8 +1192,8 @@ function renderWideSectionHeader(headerElement: HTMLElement, sectionName: string
     noColorSwatch.className = 'color-dropdown-swatch';
     noColorSwatch.title = 'No Color';
     noColorSwatch.style.cssText = `
-        width: 16px;
-        height: 16px;
+        width: 12px;
+        height: 12px;
         border-radius: 50%;
         background-color: transparent;
         margin: 2px;
@@ -1237,15 +1331,43 @@ function renderWideSectionHeader(headerElement: HTMLElement, sectionName: string
 
 // Function to edit section name
 function editSectionName(headerElement: HTMLElement, currentName: string) {
-    const titleSpan = headerElement.querySelector('span:first-child');
-    if (!titleSpan) return;
+    console.log('editSectionName called with:', { headerElement, currentName });
+    console.log('Header element children:', headerElement.children);
+    console.log('All spans in header:', headerElement.querySelectorAll('span'));
+
+    // Find the title span - it's the span that contains the section name text
+    // It could be just the section name or include "(Drop tabs here)"
+    const titleSpan = Array.from(headerElement.querySelectorAll('span')).find(span => {
+        if (!span.textContent) return false;
+        const text = span.textContent.trim();
+        return text === currentName ||
+            text === `${currentName} (Drop tabs here)` ||
+            text.startsWith(currentName);
+    });
+    console.log('Found title span:', titleSpan);
+    if (!titleSpan) {
+        console.error('Could not find title span for section:', currentName);
+        console.error('Available spans:', Array.from(headerElement.querySelectorAll('span')).map(s => s.textContent));
+        return;
+    }
 
     headerElement.classList.add('editing');
 
     const input = document.createElement('input');
     input.type = 'text';
     input.value = currentName;
-    input.style.width = '100%';
+    input.style.cssText = `
+        width: calc(100% - 30px);
+        background: var(--bg-color);
+        color: var(--text-color);
+        border: 1px solid var(--border-color);
+        border-radius: 2px;
+        padding: 2px 4px;
+        font-size: inherit;
+        font-family: inherit;
+        margin-left: 20px;
+        outline: none;
+    `;
 
     titleSpan.replaceWith(input);
     input.focus();
@@ -1666,6 +1788,9 @@ function renderTab(tab: Tab) {
     // Add context menu event
     tabElement.addEventListener('contextmenu', (e) => {
         e.preventDefault();
+        // Store click coordinates for modal positioning
+        (window as any).lastClickX = e.clientX;
+        (window as any).lastClickY = e.clientY;
         updateSections();
         window.electronAPI.showContextMenu(tab.id, sections);
     });
@@ -1958,14 +2083,184 @@ if (window.electronAPI && window.electronAPI.onMoveTabToSection) {
 let currentTabIdForSection: string | null = null;
 
 // Function to show the section creation modal
-function showSectionModal(tabId?: string) {
+function showSectionModal(tabId?: string, clickX?: number, clickY?: number) {
+    console.log('showSectionModal called with:', { tabId, clickX, clickY });
+    currentTabIdForSection = tabId || null;
+
+    // Remove any existing dynamic modal
+    const existingModal = document.getElementById('dynamic-section-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Calculate position - next to mouse but outside tab bar
+    let left = 100; // Default fallback
+    let top = 100;  // Default fallback
+
+    if (clickX !== undefined && clickY !== undefined) {
+        // Position to the right of the tab bar, aligned with click Y
+        left = currentWidth + 10; // 10px gap from tab bar edge
+        top = clickY - 30; // Center around click point
+
+        // Simple bounds checking - ensure modal is visible
+        // For narrow mode (90px): modal at 100px should be fine
+        // For wide mode (300px): modal at 310px should also be fine
+        left = Math.max(50, left); // Don't go too far left
+        top = Math.max(50, Math.min(top, window.innerHeight - 100));
+
+        console.log('Positioning info:', {
+            currentWidth,
+            calculatedLeft: currentWidth + 10,
+            finalLeft: left,
+            finalTop: top,
+            clickX,
+            clickY,
+            windowInnerHeight: window.innerHeight
+        });
+    }
+
+    console.log('Positioning modal at:', { left, top, currentWidth });
+
+    // Create the modal programmatically (same approach as test modal)
+    const dynamicModal = document.createElement('div');
+    dynamicModal.id = 'dynamic-section-modal';
+
+    // Add a temporary visible test to ensure modal appears
+    console.log('Creating modal with styles...');
+
+    // Use a more reliable positioning approach
+    // For debugging: if in wide mode, use a simple visible position
+    const isWideMode = currentWidth > 120;
+    const debugLeft = isWideMode ? 150 : left; // Force visible position in wide mode
+    const debugTop = isWideMode ? 100 : top;   // Force visible position in wide mode
+
+    console.log('Using position:', { debugLeft, debugTop, isWideMode });
+
+    dynamicModal.style.cssText = `
+        position: fixed;
+        left: ${debugLeft}px;
+        top: ${debugTop}px;
+        width: 120px;
+        height: 70px;
+        background: white;
+        border: 2px solid #007acc;
+        border-radius: 4px;
+        padding: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 999999;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        visibility: visible;
+        opacity: 1;
+    `;
+
+    // Create input
+    const dynamicInput = document.createElement('input');
+    dynamicInput.type = 'text';
+    dynamicInput.placeholder = 'Section name';
+    dynamicInput.style.cssText = `
+        width: calc(100% - 8px);
+        padding: 4px;
+        border: 1px solid #ccc;
+        border-radius: 2px;
+        font-size: 11px;
+        outline: none;
+    `;
+
+    // Create button container
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = `
+        display: flex;
+        gap: 4px;
+        justify-content: center;
+    `;
+
+    // Create buttons
+    const confirmBtn = document.createElement('button');
+    confirmBtn.textContent = '✓';
+    confirmBtn.style.cssText = `
+        padding: 4px 8px;
+        border: 1px solid #22c55e;
+        background: #22c55e;
+        color: white;
+        border-radius: 2px;
+        cursor: pointer;
+        font-size: 12px;
+    `;
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '✕';
+    cancelBtn.style.cssText = `
+        padding: 4px 8px;
+        border: 1px solid #ccc;
+        background: #f5f5f5;
+        color: #333;
+        border-radius: 2px;
+        cursor: pointer;
+        font-size: 12px;
+    `;
+
+    // Add event listeners
+    confirmBtn.addEventListener('click', () => {
+        const sectionName = dynamicInput.value.trim();
+        if (sectionName) {
+            if (currentTabIdForSection) {
+                moveTabToSection(currentTabIdForSection, sectionName);
+            } else {
+                createNewSection(sectionName);
+            }
+        }
+        dynamicModal.remove();
+        currentTabIdForSection = null;
+    });
+
+    cancelBtn.addEventListener('click', () => {
+        dynamicModal.remove();
+        currentTabIdForSection = null;
+    });
+
+    // Close on escape key
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            dynamicModal.remove();
+            currentTabIdForSection = null;
+            document.removeEventListener('keydown', handleKeyDown);
+        } else if (e.key === 'Enter') {
+            confirmBtn.click();
+            document.removeEventListener('keydown', handleKeyDown);
+        }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Assemble the modal
+    buttonContainer.appendChild(confirmBtn);
+    buttonContainer.appendChild(cancelBtn);
+    dynamicModal.appendChild(dynamicInput);
+    dynamicModal.appendChild(buttonContainer);
+    document.body.appendChild(dynamicModal);
+
+    // Focus the input
+    setTimeout(() => {
+        dynamicInput.focus();
+        dynamicInput.select();
+    }, 50);
+
+    console.log('Dynamic modal created at position:', { left, top });
+    return; // End the function here
+    console.log('showSectionModal called with:', { tabId, clickX, clickY });
     currentTabIdForSection = tabId || null;
     const modal = document.getElementById('section-modal') as HTMLElement;
+    const modalContent = modal.querySelector('.modal-content') as HTMLElement;
     const input = document.getElementById('section-name-input') as HTMLInputElement;
 
-    modal.style.display = 'block';
-    input.value = '';
-    input.focus();
+    if (!modal || !modalContent || !input) {
+        console.error('Modal elements not found');
+        return;
+    }
+
+    // Adjust modal size based on window width - much smaller and minimalistic
 }
 
 // Function to confirm section creation
@@ -1991,7 +2286,16 @@ function cancelCreateSection() {
     const modal = document.getElementById('section-modal') as HTMLElement;
     modal.style.display = 'none';
     currentTabIdForSection = null;
+
+    // Remove any click-outside listeners
+    if ((modal as any).clickHandler) {
+        document.removeEventListener('click', (modal as any).clickHandler);
+        (modal as any).clickHandler = null;
+    }
 }
+
+// Store the click handler reference for cleanup
+let handleClickOutside: ((e: MouseEvent) => void) | null = null;
 
 // Function to create a new empty section
 function createNewSection(sectionName: string) {
@@ -2126,10 +2430,58 @@ document.addEventListener('keydown', (e) => {
 
 // Expose functions globally for the context menu and tray
 (window as any).moveTabToSection = moveTabToSection;
-(window as any).createNewSection = () => showSectionModal();
+(window as any).createNewSection = () => {
+    const clickX = (window as any).lastClickX;
+    const clickY = (window as any).lastClickY;
+    console.log('createNewSection called');
+    console.log('Retrieved coordinates from window:', { clickX, clickY });
+    console.log('Window object keys:', Object.keys(window).filter(k => k.includes('Click')));
+    console.log('About to call showSectionModal...');
+    showSectionModal(undefined, clickX, clickY);
+    console.log('showSectionModal call completed');
+};
 (window as any).showSectionModal = showSectionModal;
 (window as any).confirmCreateSection = confirmCreateSection;
 (window as any).cancelCreateSection = cancelCreateSection;
+
+// Test function to manually show modal
+(window as any).testModal = () => {
+    console.log('Test modal function called');
+    showSectionModal(undefined, 200, 200);
+};
+
+// Create a simple visible modal for testing
+(window as any).createTestModal = () => {
+    console.log('Creating test modal...');
+
+    // Remove any existing test modal
+    const existing = document.getElementById('test-modal');
+    if (existing) existing.remove();
+
+    // Create a simple modal
+    const modal = document.createElement('div');
+    modal.id = 'test-modal';
+    modal.style.cssText = `
+        position: fixed;
+        left: 100px;
+        top: 100px;
+        width: 200px;
+        height: 100px;
+        background: white;
+        border: 3px solid red;
+        z-index: 999999;
+        padding: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    `;
+    modal.innerHTML = `
+        <div>Test Modal</div>
+        <input type="text" placeholder="Test input" style="width: 100%; margin: 5px 0;">
+        <button onclick="document.getElementById('test-modal').remove()">Close</button>
+    `;
+
+    document.body.appendChild(modal);
+    console.log('Test modal added to DOM');
+};
 
 
 // Theme management

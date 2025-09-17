@@ -29,10 +29,10 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js')
         }
     });
-    
+
     // Enable interaction with the window
     mainWindow.setIgnoreMouseEvents(false);
-    
+
     // Load the index.html file
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
@@ -121,16 +121,16 @@ function createWindow() {
         });
 
         dropdownPopup = new BrowserWindow({
-            width: 28,   // Smaller width for smaller icons
-            height: 140, // Height for 6 smaller icons (20px each + gaps + padding)
+            width: 130,  // Even wider to fully accommodate all 6 color circles (5 colors + no-color)
+            height: 120, // Height for color row + 4 action icons with full visibility
             x: screenX,
             y: screenY,
             frame: false,
             alwaysOnTop: true,
             resizable: false,
             movable: false,
-            transparent: false,
-            hasShadow: true,
+            transparent: true,
+            hasShadow: false,
             webPreferences: {
                 nodeIntegration: true,
                 contextIsolation: false,
@@ -138,7 +138,7 @@ function createWindow() {
             }
         });
 
-        // Create HTML content for the popup (minimalistic - icons only)
+        // Create HTML content for the popup with collapsible color options
         const htmlContent = `
             <!DOCTYPE html>
             <html>
@@ -146,29 +146,94 @@ function createWindow() {
                 <style>
                     body {
                         margin: 0;
-                        padding: 3px;
-                        background: #ffffff;
-                        border: 1px solid #d0d0d0;
+                        padding: 4px;
+                        background: transparent;
+                        border: none;
                         border-radius: 4px;
                         font-family: Arial, sans-serif;
-                        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                        box-shadow: none;
                         display: flex;
                         flex-direction: column;
-                        gap: 1px;
+                        gap: 2px;
                         overflow: hidden;
                         height: 100vh;
                         box-sizing: border-box;
+                    }
+                    .color-section {
+                        display: flex;
+                        flex-direction: row;
+                        align-items: center;
+                        gap: 2px;
+                        padding: 2px;
+                        background: transparent;
+                        border-radius: 2px;
+                        margin-bottom: 2px;
+                    }
+                    .color-icon {
+                        width: 20px;
+                        height: 20px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        cursor: pointer;
+                        border-radius: 2px;
+                        transition: all 0.2s ease;
+                        font-size: 14px;
+                        flex-shrink: 0;
+                    }
+                    .color-icon:hover {
+                        background-color: #e0e0e0;
+                    }
+                    .color-row {
+                        display: none;
+                        flex-direction: row;
+                        gap: 1px;
+                        opacity: 0;
+                        transform: translateX(-10px);
+                        transition: all 0.3s ease;
+                    }
+                    .color-row.visible {
+                        display: flex;
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                    .color-swatch {
+                        width: 12px;
+                        height: 12px;
+                        border-radius: 50%;
+                        cursor: pointer;
+                        border: 1px solid #ccc;
+                        transition: all 0.2s ease;
+                        flex-shrink: 0;
+                    }
+                    .color-swatch:hover {
+                        transform: scale(1.3);
+                        border-color: #007acc;
+                    }
+                    .no-color {
+                        background: transparent;
+                        position: relative;
+                    }
+                    .no-color::after {
+                        content: '';
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        width: 12px;
+                        height: 1px;
+                        background: #666;
+                        transform: translate(-50%, -50%) rotate(45deg);
                     }
                     .option-item {
                         display: flex;
                         align-items: center;
                         justify-content: center;
-                        width: 20px;
+                        width: 22px;
                         height: 20px;
                         cursor: pointer;
                         border-radius: 2px;
                         transition: background-color 0.2s ease;
-                        font-size: 11px;
+                        font-size: 13px;
                         flex-shrink: 0;
                     }
                     .option-item:hover {
@@ -180,7 +245,17 @@ function createWindow() {
                 </style>
             </head>
             <body>
-                <div class="option-item" onclick="sendAction('color')" title="Change color">🎨</div>
+                <div class="color-section">
+                    <div class="color-icon" onclick="toggleColors()" title="Click to show/hide colors">🎨</div>
+                    <div class="color-row" id="colorRow">
+                        <div class="color-swatch" style="background-color: #3b82f6;" onclick="sendColorAction('Blue')" title="Blue"></div>
+                        <div class="color-swatch" style="background-color: #22c55e;" onclick="sendColorAction('Green')" title="Green"></div>
+                        <div class="color-swatch" style="background-color: #ef4444;" onclick="sendColorAction('Red')" title="Red"></div>
+                        <div class="color-swatch" style="background-color: #a855f7;" onclick="sendColorAction('Purple')" title="Purple"></div>
+                        <div class="color-swatch" style="background-color: #f97316;" onclick="sendColorAction('Orange')" title="Orange"></div>
+                        <div class="color-swatch no-color" onclick="sendColorAction('none')" title="No Color"></div>
+                    </div>
+                </div>
                 <div class="option-item" onclick="sendAction('moveUp')" title="Move up">⬆️</div>
                 <div class="option-item" onclick="sendAction('moveDown')" title="Move down">⬇️</div>
                 <div class="option-item" onclick="sendAction('edit')" title="Edit name">✏️</div>
@@ -188,9 +263,35 @@ function createWindow() {
                 <script>
                     const { ipcRenderer } = require('electron');
                     const sectionName = '${content.sectionName}';
+                    let colorsVisible = false;
+                    
+                    function toggleColors() {
+                        const colorRow = document.getElementById('colorRow');
+                        
+                        if (!colorsVisible) {
+                            // Show colors
+                            colorRow.style.display = 'flex';
+                            setTimeout(() => {
+                                colorRow.classList.add('visible');
+                            }, 10);
+                            colorsVisible = true;
+                        } else {
+                            // Hide colors
+                            colorRow.classList.remove('visible');
+                            setTimeout(() => {
+                                colorRow.style.display = 'none';
+                            }, 300);
+                            colorsVisible = false;
+                        }
+                    }
                     
                     function sendAction(action) {
                         ipcRenderer.send('dropdown-action', { action, sectionName });
+                        window.close();
+                    }
+                    
+                    function sendColorAction(colorName) {
+                        ipcRenderer.send('dropdown-action', { action: 'setColor', sectionName, colorName });
                         window.close();
                     }
                 </script>
@@ -224,7 +325,7 @@ function createWindow() {
         if (mainWindow) {
             mainWindow.webContents.send('execute-dropdown-action', data);
         }
-        
+
         // Close the popup
         if (dropdownPopup) {
             dropdownPopup.close();
@@ -250,7 +351,9 @@ function createWindow() {
                         label: 'New Section...',
                         click: () => {
                             mainWindow?.webContents.executeJavaScript(`
-                                window.showSectionModal('${tabId}');
+                                const clickX = window.lastClickX;
+                                const clickY = window.lastClickY;
+                                window.showSectionModal('${tabId}', clickX, clickY);
                             `);
                         }
                     }
@@ -279,7 +382,7 @@ function createWindow() {
                 label: 'Create New Section',
                 click: () => {
                     mainWindow?.webContents.executeJavaScript(`
-                        window.showSectionModal();
+                        window.createNewSection();
                     `);
                 }
             },
@@ -313,7 +416,7 @@ function createWindow() {
     } catch (error) {
         // Tray creation failed - app will continue without tray
     }
-    
+
     const trayMenu = Menu.buildFromTemplate([
         {
             label: 'Show/Hide',
@@ -340,7 +443,7 @@ function createWindow() {
             label: 'Create New Section',
             click: () => {
                 mainWindow?.webContents.executeJavaScript(`
-                    window.showSectionModal();
+                    window.createNewSection();
                 `);
             }
         },
