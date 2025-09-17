@@ -346,7 +346,7 @@ let currentWidth = 90; // Default width for two columns with smaller tabs
 
 // Function to check if we're in narrow mode (3 tabs width or less)
 function isTwoColumnMode(): boolean {
-    return currentWidth <= 159; // Threshold for 3-tab width mode (shows hamburger menu)
+    return currentWidth <= 134; // Threshold for 3-tab width mode (shows hamburger menu)
 }
 
 // Function to update window control button sizes based on width
