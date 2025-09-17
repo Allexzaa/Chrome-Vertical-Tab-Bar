@@ -338,6 +338,9 @@ function initializeApp() {
 
     // Initialize modal
     initializeModal();
+    
+    // Initialize window control button sizes
+    updateWindowControlSizes();
 }
 
 // Initialize resize functionality
@@ -347,6 +350,25 @@ let currentWidth = 90; // Default width for two columns with smaller tabs
 // Function to check if we're in two-column mode (narrow width)
 function isTwoColumnMode(): boolean {
     return currentWidth <= 120; // Threshold for two-column mode
+}
+
+// Function to update window control button sizes based on width
+function updateWindowControlSizes() {
+    const minimizeBtn = document.getElementById('minimize-btn');
+    const maximizeBtn = document.getElementById('maximize-btn');
+    const closeBtn = document.getElementById('close-btn');
+    
+    const isNarrow = isTwoColumnMode();
+    
+    [minimizeBtn, maximizeBtn, closeBtn].forEach(btn => {
+        if (btn) {
+            if (isNarrow) {
+                btn.classList.add('narrow');
+            } else {
+                btn.classList.remove('narrow');
+            }
+        }
+    });
 }
 
 // Global setWidth function for maximize button
@@ -379,6 +401,9 @@ function setWidthGlobal(width: number) {
 
     // Re-render sections to apply responsive design
     renderAllTabs();
+    
+    // Update window control button sizes
+    updateWindowControlSizes();
 }
 
 function initializeResize(container: HTMLElement) {
@@ -433,6 +458,9 @@ function initializeResize(container: HTMLElement) {
 
         // Re-render sections to apply responsive design
         renderAllTabs();
+        
+        // Update window control button sizes
+        updateWindowControlSizes();
     }
 
     // Add resize functionality to right edge of container
@@ -512,6 +540,9 @@ function initializeResize(container: HTMLElement) {
 
         // Store the width
         localStorage.setItem('tabBarWidth', width.toString());
+        
+        // Update window control button sizes
+        updateWindowControlSizes();
     });
 
     // Listen for dropdown actions from popup window

@@ -272,6 +272,38 @@
             border-radius: 2px;
         }
 
+        /* Smaller hover box for narrow mode */
+        .window-control-btn.narrow:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 1px; /* Smaller radius */
+        }
+
+        /* Responsive window control buttons for narrow width */
+        .window-control-btn.narrow {
+            width: 16px;
+            height: 14px;
+            font-size: 10px;
+            top: 3px;
+        }
+
+        /* No gaps between buttons in narrow mode - buttons touch each other */
+        #close-btn.narrow {
+            right: 0px; /* Same position */
+        }
+
+        #maximize-btn.narrow {
+            right: 16px; /* Touching close button (16px = close button width) */
+        }
+
+        #minimize-btn.narrow {
+            right: 32px; /* Touching maximize button (16px + 16px = 32px) */
+        }
+
+        /* Transition for smooth resizing */
+        .window-control-btn {
+            transition: all 0.3s ease;
+        }
+
         .theme-toggle {
             position: absolute;
             top: 2px;
