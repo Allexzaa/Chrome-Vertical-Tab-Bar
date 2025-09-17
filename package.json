@@ -5,7 +5,7 @@
   "main": "dist/main/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json && cp src/renderer/index.html dist/renderer/",
+    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json && copy src\\renderer\\index.html dist\\renderer\\",
     "watch": "tsc -w",
     "dev": "npm run build && npm run start",
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -1,12 +1,36 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' https://www.google.com data: https:; connect-src 'self'">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' https://www.google.com data: https:; connect-src 'self'">
     <title>Vertical Tab Bar</title>
     <style>
         :root {
-            --bg-color: #ffffff;
+            --bg-color: #f8f9fa;
+            --text-color: #333333;
+            --tab-bg: #f0f0f0;
+            --tab-hover: #e0e0e0;
+            --tab-pinned: #e8e8e8;
+            --border-color: #d0d0d0;
+            --drag-handle: rgba(200, 200, 200, 0.3);
+            --drag-handle-hover: rgba(200, 200, 200, 0.5);
+            --placeholder-color: #999999;
+            --drag-over-bg: #f0f0f0;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #2e2e2e;
+            --text-color: #ffffff;
+            --tab-bg: #404040;
+            --tab-hover: #505050;
+            --tab-pinned: #383838;
+            --border-color: #555555;
+            --drag-handle: rgba(100, 100, 100, 0.4);
+            --drag-handle-hover: rgba(100, 100, 100, 0.6);
+            --placeholder-color: #cccccc;
+            --drag-over-bg: #404040;
         }
 
         html {
@@ -17,7 +41,7 @@
             overflow: hidden;
             background: var(--bg-color);
         }
-        
+
         body {
             margin: 0;
             padding: 0;
@@ -61,7 +85,7 @@
             position: absolute;
             right: 0;
             top: 0;
-            width: 4px;
+            width: 3px;
             height: 100%;
             cursor: ew-resize;
             z-index: 9999;
@@ -78,25 +102,26 @@
             flex-direction: row;
             flex-wrap: wrap;
             align-content: flex-start;
-            padding: 3px;
+            padding: 2px;
             box-sizing: border-box;
             user-select: none;
             position: relative;
             overflow-y: auto;
             overflow-x: hidden;
-            touch-action: none;  /* Prevent scrolling while dragging on touch devices */
+            touch-action: none;
+            /* Prevent scrolling while dragging on touch devices */
             background: var(--bg-color);
             z-index: 2;
-            gap: 3px;
+            gap: 2px;
         }
 
         #tab-container::-webkit-scrollbar {
-            width: 0px;  /* Hide scrollbar but keep functionality */
+            width: 0px;
+            /* Hide scrollbar but keep functionality */
         }
 
         #tab-container::before {
-            content: 'Drop URLs here';
-            color: #999;
+            color: var(--placeholder-color);
             font-family: Arial, sans-serif;
             font-size: 12px;
             padding: 10px;
@@ -111,24 +136,24 @@
         }
 
         #tab-container.drag-over {
-            background-color: #f0f0f0;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            background-color: var(--drag-over-bg);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
         }
 
         .tab {
-            width: 42px;
-            height: 42px;
+            width: 40px;
+            height: 40px;
             margin: 0;
-            background: #f0f0f0;
-            border-radius: 6px;
+            background: var(--tab-bg);
+            border-radius: 4px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             position: relative;
             cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid #d0d0d0;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border-color);
             transform: none;
             opacity: 1;
             pointer-events: auto;
@@ -137,24 +162,24 @@
         }
 
         .tab:hover {
-            background: #e0e0e0;
+            background: var(--tab-hover);
             transform: scale(1.05);
         }
 
         .tab img {
-            width: 24px;
-            height: 24px;
+            width: 28px;
+            height: 28px;
         }
 
         .tab.pinned {
-            width: 42px;
-            height: 42px;
-            background: #e8e8e8;
+            width: 40px;
+            height: 40px;
+            background: var(--tab-pinned);
         }
 
         .tab.pinned img {
-            width: 24px;
-            height: 24px;
+            width: 28px;
+            height: 28px;
         }
 
         .pin-button {
@@ -175,33 +200,30 @@
         }
 
         .sortable-ghost {
-            opacity: 0.3;
-            background-color: var(--bg-color) !important;
-            outline: 2px solid #ccc;
-            position: relative;
-            z-index: 2;
+            opacity: 0.3 !important;
+            background-color: var(--drag-over-bg) !important;
+            border: 2px dashed #007acc !important;
+            transform: scale(0.95) !important;
         }
 
         .sortable-drag {
-            background: #f0f0f0 !important;
+            background: var(--tab-hover) !important;
             cursor: grabbing !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            transform-origin: center center;
-            opacity: 0.9;
-            position: fixed !important;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4) !important;
+            opacity: 0.9 !important;
             z-index: 1000 !important;
-            pointer-events: none;
+            border: 2px solid #007acc !important;
+            transform: scale(1.05) rotate(2deg) !important;
         }
 
         .sortable-fallback {
-            background: #f0f0f0 !important;
+            background: var(--tab-hover) !important;
             cursor: grabbing !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            transform-origin: center center;
-            opacity: 0.9;
-            pointer-events: none;
-            position: fixed !important;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4) !important;
+            opacity: 0.9 !important;
             z-index: 1000 !important;
+            border: 2px solid #007acc !important;
+            transform: scale(1.05) !important;
         }
 
         /* Ensure consistent background during dragging */
@@ -215,34 +237,521 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 20px;
-            background: rgba(200, 200, 200, 0.3);
+            height: 16px;
+            background: var(--drag-handle);
             cursor: move;
             -webkit-app-region: drag;
             z-index: 10;
-            border-bottom: 1px solid #e0e0e0;
+            border-bottom: 1px solid var(--border-color);
         }
 
         .drag-handle:hover {
-            background: rgba(200, 200, 200, 0.5);
+            background: var(--drag-handle-hover);
         }
 
-        /* Adjust tab container to account for drag handle */
+        .window-control-btn {
+            position: absolute;
+            top: 1px;
+            width: 16px;
+            height: 14px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 10px;
+            color: var(--text-color);
+            opacity: 0.6;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            margin: 0;
+            z-index: 11;
+            -webkit-app-region: no-drag;
+        }
+
+        .window-control-btn:hover {
+            opacity: 0.9;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 1px;
+        }
+
+        /* Smaller hover box for narrow mode */
+        .window-control-btn.narrow:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 1px;
+            /* Smaller radius */
+        }
+
+        /* Even smaller buttons for narrow width */
+        .window-control-btn.narrow {
+            width: 14px;
+            height: 12px;
+            font-size: 9px;
+            top: 2px;
+        }
+
+        /* Ultra-compact buttons in narrow mode */
+        #close-btn.narrow {
+            right: 0px;
+            /* Same position */
+        }
+
+        #maximize-btn.narrow {
+            right: 14px;
+            /* Touching close button (14px = narrow close button width) */
+        }
+
+        #minimize-btn.narrow {
+            right: 28px;
+            /* Touching maximize button (14px + 14px = 28px) */
+        }
+
+        /* Transition for smooth resizing */
+        .window-control-btn {
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 1px;
+            left: 1px;
+            width: 14px;
+            height: 12px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 9px;
+            z-index: 11;
+            -webkit-app-region: no-drag;
+            color: var(--text-color);
+            opacity: 0.6;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            opacity: 0.9;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 1px;
+        }
+
+        /* Theme icon styling for better contrast */
+        .theme-icon {
+            display: inline-block;
+            font-size: 10px;
+            filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+        }
+
+        .theme-icon.moon {
+            color: #4a90e2;
+            text-shadow: 0 0 2px rgba(74, 144, 226, 0.8);
+        }
+
+        .theme-icon.sun {
+            color: #ffa500;
+            text-shadow: 0 0 2px rgba(255, 165, 0, 0.8);
+        }
+
+        /* Delete icon styling */
+        .delete-icon {
+            color: #ff4444;
+            font-weight: bold;
+            font-size: 10px;
+            text-shadow: 0 0 1px rgba(0, 0, 0, 0.5);
+        }
+
+        .delete-icon:hover {
+            color: #ff0000;
+            text-shadow: 0 0 2px rgba(255, 0, 0, 0.8);
+        }
+
+        /* Adjust tab container to account for smaller drag handle */
         #tab-container {
-            margin-top: 20px;
-            height: calc(100% - 20px);
+            margin-top: 16px;
+            height: calc(100% - 16px);
+        }
+
+        /* Section header styles */
+        .section-header {
+            width: calc(100% - 4px);
+            color: var(--text-color);
+            font-family: Arial, sans-serif;
+            font-size: 9px;
+            font-weight: bold;
+            text-align: center;
+            padding: 1px 2px 1px 2px;
+            margin: 1px 2px 1px 2px;
+            background: var(--tab-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 1px;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+            opacity: 0.9;
+            transition: all 0.2s ease;
+            min-height: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .section-header:hover {
+            opacity: 1;
+            background: var(--tab-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+        }
+
+        .section-header.editing {
+            background: var(--tab-hover);
+            border-color: var(--text-color);
+            opacity: 1;
+        }
+
+        .section-header input {
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+            font-weight: bold;
+            text-align: center;
+            width: 100%;
+            outline: none;
+        }
+
+        .section-actions {
+            position: absolute;
+            top: 1px;
+            right: 1px;
+            font-size: 8px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 2px;
+            padding: 1px 3px;
+            cursor: pointer;
+            display: flex;
+            gap: 1px;
+        }
+
+        .section-header:hover .section-actions {
+            opacity: 1;
+        }
+
+        .section-header[draggable="true"] {
+            cursor: grab;
+        }
+
+        .section-header[draggable="true"]:active {
+            cursor: grabbing;
+        }
+
+        .section-header.drag-over {
+            border: 2px solid #007acc;
+            background: var(--drag-over-bg);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 123, 204, 0.3);
+        }
+
+        .section-header.drop-target {
+            border: 2px dashed #007acc;
+            background: var(--drag-over-bg);
+            opacity: 1;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 0.8;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .section-header.empty-section {
+            min-height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed var(--border-color);
+            opacity: 0.6;
+        }
+
+        .section-header.empty-section:hover {
+            border-color: #007acc;
+            opacity: 0.8;
+        }
+
+        .section-header.drag-hover {
+            border: 3px solid #007acc !important;
+            background: var(--drag-over-bg) !important;
+            transform: translateY(-3px) scale(1.05) !important;
+            box-shadow: 0 6px 16px rgba(0, 123, 204, 0.5) !important;
+            z-index: 10 !important;
+            opacity: 1 !important;
+        }
+
+        .section-header.drag-hover::after {
+            content: '📥 Drop here';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 123, 204, 0.9);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: bold;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .section-header.section-dragging {
+            opacity: 0.5 !important;
+            transform: scale(0.95) !important;
+            border: 2px dashed #007acc !important;
+        }
+
+        .section-header.section-drop-target {
+            border: 3px solid #28a745 !important;
+            background: rgba(40, 167, 69, 0.1) !important;
+            transform: translateY(-2px) scale(1.02) !important;
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
+        }
+
+        .section-header.section-drop-target::after {
+            content: '📍 Drop section here';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(40, 167, 69, 0.9);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: bold;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .tab[data-dragging="true"] {
+            opacity: 0.7;
+            transform: scale(0.95);
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 99999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: transparent;
+            pointer-events: none;
+        }
+
+        .modal-content {
+            background-color: var(--bg-color);
+            position: absolute;
+            padding: 6px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            width: 120px;
+            text-align: center;
+            color: var(--text-color);
+            font-family: Arial, sans-serif;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            pointer-events: auto;
+        }
+
+        .modal input {
+            width: calc(100% - 8px);
+            padding: 4px;
+            margin: 0 0 4px 0;
+            border: 1px solid var(--border-color);
+            border-radius: 2px;
+            background: var(--tab-bg);
+            color: var(--text-color);
+            font-size: 11px;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        .modal button {
+            padding: 4px 8px;
+            margin: 1px;
+            border: 1px solid var(--border-color);
+            border-radius: 2px;
+            background: var(--tab-bg);
+            color: var(--text-color);
+            cursor: pointer;
+            font-size: 12px;
+            min-width: 24px;
+        }
+
+        .modal button:hover {
+            background: var(--tab-hover);
+        }
+
+        .modal button.primary {
+            background: #22c55e;
+            color: white;
+            border-color: #22c55e;
+        }
+
+        .modal button.primary:hover {
+            background: #16a34a;
+        }
+
+        /* Responsive modal adjustments */
+        @media (max-width: 159px) {
+            .modal-content {
+                width: 100px !important;
+                padding: 4px !important;
+            }
+
+            .modal input {
+                font-size: 10px !important;
+                padding: 3px !important;
+            }
+
+            .modal button {
+                font-size: 11px !important;
+                padding: 3px 6px !important;
+                margin: 1px !important;
+                min-width: 20px !important;
+            }
+        }
+
+        /* Section color dropdown styles */
+        .section-color-dropdown {
+            position: absolute !important;
+            z-index: 10000 !important;
+        }
+
+        .color-dropdown-swatch {
+            transition: all 0.2s ease !important;
+        }
+
+        .color-dropdown-swatch:hover {
+            transform: scale(1.2) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        .section-color-circle {
+            transition: all 0.2s ease !important;
+            z-index: 1000 !important;
+        }
+
+        .section-color-circle:hover {
+            transform: translateY(-50%) scale(1.2) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        /* Ensure section headers have proper positioning context */
+        .section-header {
+            position: relative !important;
+            z-index: 100 !important;
+        }
+
+        /* Ensure dropdowns appear above tabs */
+        .section-color-dropdown {
+            z-index: 10000 !important;
+        }
+
+        /* Dark theme adjustments for color dropdown */
+        [data-theme="dark"] .color-dropdown-swatch:hover {
+            box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2) !important;
+        }
+
+        /* Hamburger menu styles for narrow mode */
+        .section-hamburger-menu {
+            transition: all 0.2s ease !important;
+        }
+
+        .section-hamburger-menu:hover {
+            background-color: var(--tab-hover) !important;
+        }
+
+        /* Section options dropdown styles */
+        .section-options-dropdown {
+            position: absolute !important;
+            z-index: 10000 !important;
+            background: var(--bg-color) !important;
+            border: 1px solid var(--border-color) !important;
+            border-radius: 4px !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        .section-option-item {
+            transition: background-color 0.2s ease !important;
+        }
+
+        .section-option-item:hover {
+            background-color: var(--tab-hover) !important;
+        }
+
+        /* Dark theme adjustments for options dropdown */
+        [data-theme="dark"] .section-options-dropdown {
+            background: var(--bg-color) !important;
+            border-color: var(--border-color) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        /* Narrow mode color dropdown */
+        .section-color-dropdown-narrow {
+            position: absolute !important;
+            z-index: 10001 !important;
+            background: var(--bg-color) !important;
+            border: 1px solid var(--border-color) !important;
+            border-radius: 4px !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        [data-theme="dark"] .section-color-dropdown-narrow {
+            background: var(--bg-color) !important;
+            border-color: var(--border-color) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
         }
     </style>
 </head>
+
 <body>
     <div id="app-root">
         <div class="container">
-            <div class="drag-handle"></div>
+            <div class="drag-handle">
+                <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode"><span
+                        class="theme-icon moon">🌙</span></button>
+                <button class="window-control-btn" id="close-btn" title="Close" style="right: 0px;">×</button>
+                <button class="window-control-btn" id="maximize-btn" title="Maximize" style="right: 17px;">□</button>
+                <button class="window-control-btn" id="minimize-btn" title="Minimize" style="right: 34px;">−</button>
+            </div>
             <div id="tab-container">
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for creating sections -->
+    <div id="section-modal" class="modal">
+        <div class="modal-content">
+            <input type="text" id="section-name-input" placeholder="Section name">
+            <div>
+                <button class="primary" id="confirm-section-btn">✓</button>
+                <button id="cancel-section-btn">✕</button>
             </div>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script type="module" src="renderer.js"></script>
 </body>
+
 </html>
