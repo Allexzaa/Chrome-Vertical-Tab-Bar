@@ -39,8 +39,7 @@ function createWindow() {
     // Show the window after it's fully loaded
     mainWindow.once('ready-to-show', () => {
         mainWindow?.show();
-        // Open dev tools for debugging
-        mainWindow?.webContents.openDevTools();
+
     });
 
     // Event handlers for the window
@@ -112,16 +111,10 @@ function createWindow() {
         const screenX = mainWindowBounds.x + x;
         const screenY = mainWindowBounds.y + y;
 
-        console.log('Creating popup at screen coordinates:', {
-            mainWindowBounds,
-            relativeX: x,
-            relativeY: y,
-            screenX,
-            screenY
-        });
+
 
         dropdownPopup = new BrowserWindow({
-            width: 130,  // Even wider to fully accommodate all 6 color circles (5 colors + no-color)
+            width: 170,  // Extra wide to ensure expanded colors fit completely
             height: 120, // Height for color row + 4 action icons with full visibility
             x: screenX,
             y: screenY,
@@ -134,7 +127,7 @@ function createWindow() {
             webPreferences: {
                 nodeIntegration: true,
                 contextIsolation: false,
-                webSecurity: false
+                webSecurity: true
             }
         });
 
@@ -146,18 +139,52 @@ function createWindow() {
                 <style>
                     body {
                         margin: 0;
-                        padding: 4px;
+                        padding: 3px;
                         background: transparent;
                         border: none;
-                        border-radius: 4px;
                         font-family: Arial, sans-serif;
                         box-shadow: none;
-                        display: flex;
-                        flex-direction: column;
-                        gap: 2px;
                         overflow: hidden;
                         height: 100vh;
                         box-sizing: border-box;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 2px;
+                    }
+                    .glass-container {
+                        background: rgba(61, 143, 224, 0.92);
+                        backdrop-filter: blur(50px);
+                        -webkit-backdrop-filter: blur(50px);
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                        border-radius: 6px;
+                        padding: 4px 2px;
+                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                        display: inline-flex;
+                        flex-direction: column;
+                        gap: 2px;
+                        width: fit-content;
+                        align-self: center;
+                        min-width: fit-content;
+                    }
+                    .expanded-colors-glass {
+                        background: rgba(30, 78, 102, 0.57);
+                        backdrop-filter: blur(50px);
+                        -webkit-backdrop-filter: blur(50px);
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                        border-radius: 6px;
+                        padding: 3px 6px;
+                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                        display: none;
+                        width: fit-content;
+                        transition: all 0.3s ease;
+                        position: absolute;
+                        top: 5px;
+                        left: 60px;
+                        z-index: 1000;
+                        pointer-events: auto;
+                    }
+                    .expanded-colors-glass.visible {
+                        display: flex;
                     }
                     .color-section {
                         display: flex;
@@ -185,17 +212,10 @@ function createWindow() {
                         background-color: #e0e0e0;
                     }
                     .color-row {
-                        display: none;
+                        display: flex;
                         flex-direction: row;
                         gap: 1px;
-                        opacity: 0;
-                        transform: translateX(-10px);
-                        transition: all 0.3s ease;
-                    }
-                    .color-row.visible {
-                        display: flex;
-                        opacity: 1;
-                        transform: translateX(0);
+                        align-items: center;
                     }
                     .color-swatch {
                         width: 12px;
@@ -245,8 +265,14 @@ function createWindow() {
                 </style>
             </head>
             <body>
-                <div class="color-section">
+                <div class="glass-container">
                     <div class="color-icon" onclick="toggleColors()" title="Click to show/hide colors">🎨</div>
+                    <div class="option-item" onclick="sendAction('moveUp')" title="Move up">⬆️</div>
+                    <div class="option-item" onclick="sendAction('moveDown')" title="Move down">⬇️</div>
+                    <div class="option-item" onclick="sendAction('edit')" title="Edit name">✏️</div>
+                    <div class="option-item" onclick="sendAction('delete')" title="Delete section">×</div>
+                </div>
+                <div class="expanded-colors-glass" id="expandedColorsGlass">
                     <div class="color-row" id="colorRow">
                         <div class="color-swatch" style="background-color: #3b82f6;" onclick="sendColorAction('Blue')" title="Blue"></div>
                         <div class="color-swatch" style="background-color: #22c55e;" onclick="sendColorAction('Green')" title="Green"></div>
@@ -256,31 +282,21 @@ function createWindow() {
                         <div class="color-swatch no-color" onclick="sendColorAction('none')" title="No Color"></div>
                     </div>
                 </div>
-                <div class="option-item" onclick="sendAction('moveUp')" title="Move up">⬆️</div>
-                <div class="option-item" onclick="sendAction('moveDown')" title="Move down">⬇️</div>
-                <div class="option-item" onclick="sendAction('edit')" title="Edit name">✏️</div>
-                <div class="option-item" onclick="sendAction('delete')" title="Delete section">×</div>
                 <script>
                     const { ipcRenderer } = require('electron');
                     const sectionName = '${content.sectionName}';
                     let colorsVisible = false;
                     
                     function toggleColors() {
-                        const colorRow = document.getElementById('colorRow');
+                        const expandedColorsGlass = document.getElementById('expandedColorsGlass');
                         
                         if (!colorsVisible) {
-                            // Show colors
-                            colorRow.style.display = 'flex';
-                            setTimeout(() => {
-                                colorRow.classList.add('visible');
-                            }, 10);
+                            // Show colors glass container
+                            expandedColorsGlass.classList.add('visible');
                             colorsVisible = true;
                         } else {
-                            // Hide colors
-                            colorRow.classList.remove('visible');
-                            setTimeout(() => {
-                                colorRow.style.display = 'none';
-                            }, 300);
+                            // Hide colors glass container
+                            expandedColorsGlass.classList.remove('visible');
                             colorsVisible = false;
                         }
                     }

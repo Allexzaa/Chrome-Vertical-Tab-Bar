@@ -327,7 +327,7 @@ function initializeApp() {
                 // Store click coordinates for modal positioning
                 (window as any).lastClickX = e.clientX;
                 (window as any).lastClickY = e.clientY;
-                console.log('Stored click coordinates:', { x: e.clientX, y: e.clientY });
+
                 window.electronAPI.showEmptySpaceContextMenu();
             }
         });
@@ -537,14 +537,9 @@ function initializeResize(container: HTMLElement) {
                 moveSectionDown(sectionName);
                 break;
             case 'edit':
-                console.log('Edit action triggered for section:', sectionName);
                 const editHeaderElement = document.querySelector(`[data-section="${sectionName}"]`) as HTMLElement;
-                console.log('Found header element:', editHeaderElement);
                 if (editHeaderElement) {
-                    console.log('Calling editSectionName...');
                     editSectionName(editHeaderElement, sectionName);
-                } else {
-                    console.error('Could not find header element for section:', sectionName);
                 }
                 break;
             case 'delete':
@@ -999,9 +994,9 @@ function renderNarrowSectionHeader(headerElement: HTMLElement, sectionName: stri
             // Calculate screen position for popup window
             const hamburgerRect = hamburgerIcon.getBoundingClientRect();
 
-            // Position popup window to the right-down of the hamburger icon
-            const popupX = Math.round(hamburgerRect.right + 5); // 5px to the right of the icon
-            const popupY = Math.round(hamburgerRect.bottom + 2); // 2px below the icon
+            // Position popup window directly below the hamburger icon
+            const popupX = Math.round(hamburgerRect.left - 65); // Move further left to align with visual icon
+            const popupY = Math.round(hamburgerRect.bottom - 4); // 2px below the icon
 
             // Show popup window outside the main window
             window.electronAPI.showDropdownPopup(popupX, popupY, {
@@ -1331,9 +1326,7 @@ function renderWideSectionHeader(headerElement: HTMLElement, sectionName: string
 
 // Function to edit section name
 function editSectionName(headerElement: HTMLElement, currentName: string) {
-    console.log('editSectionName called with:', { headerElement, currentName });
-    console.log('Header element children:', headerElement.children);
-    console.log('All spans in header:', headerElement.querySelectorAll('span'));
+
 
     // Find the title span - it's the span that contains the section name text
     // It could be just the section name or include "(Drop tabs here)"
@@ -1673,16 +1666,13 @@ function getDropTargetSection(event: DragEvent): string {
 // Function to render all tabs grouped by sections
 function renderAllTabs() {
     if (!tabContainer) {
-        console.error('❌ tabContainer not found, cannot render tabs');
         return;
     }
-
-    console.log('🎨 Starting renderAllTabs...');
 
     // Clear all elements except resize handle
     const elementsToRemove = tabContainer.querySelectorAll('.tab, .section-header');
     elementsToRemove.forEach(el => el.remove());
-    console.log(`🧹 Cleared ${elementsToRemove.length} existing elements`);
+
 
     // Group tabs by section
     const tabsBySection: { [section: string]: Tab[] } = {};
@@ -1732,15 +1722,14 @@ function renderAllTabs() {
         sectionsToRender.push('Unsorted');
     }
 
-    console.log('Rendering sections:', sectionsToRender);
-    console.log('Tabs by section:', tabsBySection);
+
 
     sectionsToRender.forEach(section => {
         // Check if section is empty
         const sectionTabs = tabsBySection[section] || [];
         const isEmpty = sectionTabs.length === 0;
 
-        console.log(`Rendering section "${section}" with ${sectionTabs.length} tabs`);
+
 
         // Always render section header
         renderSectionHeader(section, isEmpty);
@@ -1834,23 +1823,15 @@ function getSectionColor(sectionName: string): string {
 
 // Load tabs from localStorage
 function loadTabs() {
-    console.log('🔄 Loading tabs from localStorage...');
-
     const savedTabs = localStorage.getItem('tabs');
     if (savedTabs) {
         tabs = JSON.parse(savedTabs);
-        console.log(`📋 Loaded ${tabs.length} tabs:`, tabs);
-    } else {
-        console.log('📋 No saved tabs found');
     }
 
     // Load sections
     const savedSections = localStorage.getItem('sections');
     if (savedSections) {
         sections = JSON.parse(savedSections);
-        console.log(`📁 Loaded ${sections.length} sections:`, sections);
-    } else {
-        console.log('📁 No saved sections found');
     }
 
     // Load section colors
@@ -1858,10 +1839,7 @@ function loadTabs() {
 
     // Always render after loading both tabs and sections
     if (tabs.length > 0 || sections.length > 0) {
-        console.log('🎨 Rendering tabs...');
         renderAllTabs();
-    } else {
-        console.log('🎨 Nothing to render');
     }
 }
 
@@ -2444,44 +2422,8 @@ document.addEventListener('keydown', (e) => {
 (window as any).confirmCreateSection = confirmCreateSection;
 (window as any).cancelCreateSection = cancelCreateSection;
 
-// Test function to manually show modal
-(window as any).testModal = () => {
-    console.log('Test modal function called');
-    showSectionModal(undefined, 200, 200);
-};
 
-// Create a simple visible modal for testing
-(window as any).createTestModal = () => {
-    console.log('Creating test modal...');
 
-    // Remove any existing test modal
-    const existing = document.getElementById('test-modal');
-    if (existing) existing.remove();
-
-    // Create a simple modal
-    const modal = document.createElement('div');
-    modal.id = 'test-modal';
-    modal.style.cssText = `
-        position: fixed;
-        left: 100px;
-        top: 100px;
-        width: 200px;
-        height: 100px;
-        background: white;
-        border: 3px solid red;
-        z-index: 999999;
-        padding: 10px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    `;
-    modal.innerHTML = `
-        <div>Test Modal</div>
-        <input type="text" placeholder="Test input" style="width: 100%; margin: 5px 0;">
-        <button onclick="document.getElementById('test-modal').remove()">Close</button>
-    `;
-
-    document.body.appendChild(modal);
-    console.log('Test modal added to DOM');
-};
 
 
 // Theme management
