@@ -336,9 +336,6 @@ function initializeApp() {
     // Load tabs
     loadTabs();
 
-    // Initialize modal
-    initializeModal();
-    
     // Initialize window control button sizes
     updateWindowControlSizes();
 }
@@ -357,9 +354,9 @@ function updateWindowControlSizes() {
     const minimizeBtn = document.getElementById('minimize-btn');
     const maximizeBtn = document.getElementById('maximize-btn');
     const closeBtn = document.getElementById('close-btn');
-    
+
     const isNarrow = isTwoColumnMode();
-    
+
     [minimizeBtn, maximizeBtn, closeBtn].forEach(btn => {
         if (btn) {
             if (isNarrow) {
@@ -373,7 +370,7 @@ function updateWindowControlSizes() {
 
 // Global setWidth function for maximize button
 function setWidthGlobal(width: number) {
-    const boundedWidth = Math.max(90, Math.min(300, width));
+    const boundedWidth = Math.max(90, Math.min(266, width));
     currentWidth = boundedWidth;
 
     // Get all elements that need width update
@@ -401,7 +398,7 @@ function setWidthGlobal(width: number) {
 
     // Re-render sections to apply responsive design
     renderAllTabs();
-    
+
     // Update window control button sizes
     updateWindowControlSizes();
 }
@@ -431,7 +428,7 @@ function initializeResize(container: HTMLElement) {
     });
 
     function setWidth(width: number) {
-        const boundedWidth = Math.max(90, Math.min(300, width));
+        const boundedWidth = Math.max(90, Math.min(266, width));
         currentWidth = boundedWidth;
 
         // Get all elements that need width update
@@ -458,7 +455,7 @@ function initializeResize(container: HTMLElement) {
 
         // Re-render sections to apply responsive design
         renderAllTabs();
-        
+
         // Update window control button sizes
         updateWindowControlSizes();
     }
@@ -540,7 +537,7 @@ function initializeResize(container: HTMLElement) {
 
         // Store the width
         localStorage.setItem('tabBarWidth', width.toString());
-        
+
         // Update window control button sizes
         updateWindowControlSizes();
     });
@@ -577,6 +574,20 @@ function initializeResize(container: HTMLElement) {
                 deleteSection(sectionName);
                 break;
         }
+    });
+
+    // Listen for section modal results from popup window
+    window.electronAPI.onSectionModalResult((data: { action: string, sectionName?: string, tabId?: string }) => {
+        if (data.action === 'confirm' && data.sectionName) {
+            if (data.tabId) {
+                // Move tab to section
+                moveTabToSection(data.tabId, data.sectionName);
+            } else {
+                // Create new empty section
+                createNewSection(data.sectionName);
+            }
+        }
+        // Cancel action doesn't need any handling
     });
 
     // Update window size to match current width
@@ -2091,217 +2102,17 @@ if (window.electronAPI && window.electronAPI.onMoveTabToSection) {
 // Variables for modal handling
 let currentTabIdForSection: string | null = null;
 
-// Function to show the section creation modal
+// Function to show the section creation modal as a separate window
 function showSectionModal(tabId?: string, clickX?: number, clickY?: number) {
-    console.log('showSectionModal called with:', { tabId, clickX, clickY });
-    currentTabIdForSection = tabId || null;
+    // Use default coordinates if not provided
+    const x = clickX || 100;
+    const y = clickY || 100;
 
-    // Remove any existing dynamic modal
-    const existingModal = document.getElementById('dynamic-section-modal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-
-    // Calculate position - next to mouse but outside tab bar
-    let left = 100; // Default fallback
-    let top = 100;  // Default fallback
-
-    if (clickX !== undefined && clickY !== undefined) {
-        // Position to the right of the tab bar, aligned with click Y
-        left = currentWidth + 10; // 10px gap from tab bar edge
-        top = clickY - 30; // Center around click point
-
-        // Simple bounds checking - ensure modal is visible
-        // For narrow mode (90px): modal at 100px should be fine
-        // For wide mode (300px): modal at 310px should also be fine
-        left = Math.max(50, left); // Don't go too far left
-        top = Math.max(50, Math.min(top, window.innerHeight - 100));
-
-        console.log('Positioning info:', {
-            currentWidth,
-            calculatedLeft: currentWidth + 10,
-            finalLeft: left,
-            finalTop: top,
-            clickX,
-            clickY,
-            windowInnerHeight: window.innerHeight
-        });
-    }
-
-    console.log('Positioning modal at:', { left, top, currentWidth });
-
-    // Create the modal programmatically (same approach as test modal)
-    const dynamicModal = document.createElement('div');
-    dynamicModal.id = 'dynamic-section-modal';
-
-    // Add a temporary visible test to ensure modal appears
-    console.log('Creating modal with styles...');
-
-    // Use a more reliable positioning approach
-    // For debugging: if in wide mode, use a simple visible position
-    const isWideMode = currentWidth > 159;
-    const debugLeft = isWideMode ? 150 : left; // Force visible position in wide mode
-    const debugTop = isWideMode ? 100 : top;   // Force visible position in wide mode
-
-    console.log('Using position:', { debugLeft, debugTop, isWideMode });
-
-    dynamicModal.style.cssText = `
-        position: fixed;
-        left: ${debugLeft}px;
-        top: ${debugTop}px;
-        width: 120px;
-        height: 70px;
-        background: white;
-        border: 2px solid #007acc;
-        border-radius: 4px;
-        padding: 6px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        z-index: 999999;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        visibility: visible;
-        opacity: 1;
-    `;
-
-    // Create input
-    const dynamicInput = document.createElement('input');
-    dynamicInput.type = 'text';
-    dynamicInput.placeholder = 'Section name';
-    dynamicInput.style.cssText = `
-        width: calc(100% - 8px);
-        padding: 4px;
-        border: 1px solid #ccc;
-        border-radius: 2px;
-        font-size: 11px;
-        outline: none;
-    `;
-
-    // Create button container
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = `
-        display: flex;
-        gap: 4px;
-        justify-content: center;
-    `;
-
-    // Create buttons
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '✓';
-    confirmBtn.style.cssText = `
-        padding: 4px 8px;
-        border: 1px solid #22c55e;
-        background: #22c55e;
-        color: white;
-        border-radius: 2px;
-        cursor: pointer;
-        font-size: 12px;
-    `;
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '✕';
-    cancelBtn.style.cssText = `
-        padding: 4px 8px;
-        border: 1px solid #ccc;
-        background: #f5f5f5;
-        color: #333;
-        border-radius: 2px;
-        cursor: pointer;
-        font-size: 12px;
-    `;
-
-    // Add event listeners
-    confirmBtn.addEventListener('click', () => {
-        const sectionName = dynamicInput.value.trim();
-        if (sectionName) {
-            if (currentTabIdForSection) {
-                moveTabToSection(currentTabIdForSection, sectionName);
-            } else {
-                createNewSection(sectionName);
-            }
-        }
-        dynamicModal.remove();
-        currentTabIdForSection = null;
-    });
-
-    cancelBtn.addEventListener('click', () => {
-        dynamicModal.remove();
-        currentTabIdForSection = null;
-    });
-
-    // Close on escape key
-    const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-            dynamicModal.remove();
-            currentTabIdForSection = null;
-            document.removeEventListener('keydown', handleKeyDown);
-        } else if (e.key === 'Enter') {
-            confirmBtn.click();
-            document.removeEventListener('keydown', handleKeyDown);
-        }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-
-    // Assemble the modal
-    buttonContainer.appendChild(confirmBtn);
-    buttonContainer.appendChild(cancelBtn);
-    dynamicModal.appendChild(dynamicInput);
-    dynamicModal.appendChild(buttonContainer);
-    document.body.appendChild(dynamicModal);
-
-    // Focus the input
-    setTimeout(() => {
-        dynamicInput.focus();
-        dynamicInput.select();
-    }, 50);
-
-    console.log('Dynamic modal created at position:', { left, top });
-    return; // End the function here
-    console.log('showSectionModal called with:', { tabId, clickX, clickY });
-    currentTabIdForSection = tabId || null;
-    const modal = document.getElementById('section-modal') as HTMLElement;
-    const modalContent = modal.querySelector('.modal-content') as HTMLElement;
-    const input = document.getElementById('section-name-input') as HTMLInputElement;
-
-    if (!modal || !modalContent || !input) {
-        console.error('Modal elements not found');
-        return;
-    }
-
-    // Adjust modal size based on window width - much smaller and minimalistic
+    // Show the section modal popup window at mouse coordinates
+    window.electronAPI.showSectionModal(x, y, tabId);
 }
 
-// Function to confirm section creation
-function confirmCreateSection() {
-    const input = document.getElementById('section-name-input') as HTMLInputElement;
-    const sectionName = input.value.trim();
-
-    if (sectionName) {
-        if (currentTabIdForSection) {
-            // Move specific tab to new section
-            moveTabToSection(currentTabIdForSection, sectionName);
-        } else {
-            // Create empty section
-            createNewSection(sectionName);
-        }
-    }
-
-    cancelCreateSection();
-}
-
-// Function to cancel section creation
-function cancelCreateSection() {
-    const modal = document.getElementById('section-modal') as HTMLElement;
-    modal.style.display = 'none';
-    currentTabIdForSection = null;
-
-    // Remove any click-outside listeners
-    if ((modal as any).clickHandler) {
-        document.removeEventListener('click', (modal as any).clickHandler);
-        (modal as any).clickHandler = null;
-    }
-}
+// Old modal functions removed - now using separate popup window
 
 // Store the click handler reference for cleanup
 let handleClickOutside: ((e: MouseEvent) => void) | null = null;
@@ -2399,43 +2210,7 @@ function deleteSection(sectionName: string) {
     renderAllTabs();
 }
 
-// Initialize modal event listeners
-function initializeModal() {
-    const confirmBtn = document.getElementById('confirm-section-btn');
-    const cancelBtn = document.getElementById('cancel-section-btn');
-    const modal = document.getElementById('section-modal') as HTMLElement;
-
-    if (confirmBtn) {
-        confirmBtn.addEventListener('click', confirmCreateSection);
-    }
-
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', cancelCreateSection);
-    }
-
-    // Close modal when clicking outside
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                cancelCreateSection();
-            }
-        });
-    }
-}
-
-// Add keyboard support for modal
-document.addEventListener('keydown', (e) => {
-    const modal = document.getElementById('section-modal') as HTMLElement;
-    if (modal && modal.style.display === 'block') {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            confirmCreateSection();
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            cancelCreateSection();
-        }
-    }
-});
+// Old modal initialization removed - now using separate popup window
 
 // Expose functions globally for the context menu and tray
 (window as any).moveTabToSection = moveTabToSection;
@@ -2450,8 +2225,7 @@ document.addEventListener('keydown', (e) => {
     console.log('showSectionModal call completed');
 };
 (window as any).showSectionModal = showSectionModal;
-(window as any).confirmCreateSection = confirmCreateSection;
-(window as any).cancelCreateSection = cancelCreateSection;
+// Old modal functions no longer needed
 
 
 
@@ -2562,7 +2336,7 @@ function initializeWindowControls() {
     if (maximizeBtn) {
         maximizeBtn.addEventListener('click', () => {
             // Custom maximize to 300px width instead of full screen
-            setWidthGlobal(300);
+            setWidthGlobal(266);
         });
     }
 

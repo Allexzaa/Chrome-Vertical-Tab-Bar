@@ -18,6 +18,8 @@ interface ElectronAPI {
     showDropdownPopup: (x: number, y: number, content: any) => void;
     hideDropdownPopup: () => void;
     onDropdownAction: (callback: (data: { action: string, sectionName: string, colorName?: string }) => void) => void;
+    showSectionModal: (x: number, y: number, tabId?: string) => void;
+    onSectionModalResult: (callback: (data: { action: string, sectionName?: string, tabId?: string }) => void) => void;
 }
 
 declare global {

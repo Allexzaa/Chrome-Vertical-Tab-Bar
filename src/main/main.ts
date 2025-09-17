@@ -3,6 +3,7 @@ import * as path from 'path';
 
 let mainWindow: BrowserWindow | null = null;
 let dropdownPopup: BrowserWindow | null = null;
+let sectionModalPopup: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
 function createWindow() {
@@ -59,7 +60,7 @@ function createWindow() {
             const [_, height] = mainWindow.getSize();
 
             // Ensure width is within bounds
-            const boundedWidth = Math.max(40, Math.min(300, width));
+            const boundedWidth = Math.max(40, Math.min(266, width));
 
             // Resize window and maintain current position
             mainWindow.setBounds({
@@ -335,6 +336,177 @@ function createWindow() {
         }
     });
 
+    // Handle section modal popup
+    ipcMain.on('show-section-modal', (event, x: number, y: number, tabId?: string) => {
+        if (sectionModalPopup) {
+            sectionModalPopup.close();
+        }
+
+        // Get main window position to calculate screen coordinates
+        const mainWindowBounds = mainWindow?.getBounds();
+        if (!mainWindowBounds) return;
+
+        // Calculate screen position: main window position + relative coordinates
+        const screenX = mainWindowBounds.x + x;
+        const screenY = mainWindowBounds.y + y;
+
+        sectionModalPopup = new BrowserWindow({
+            width: 120,  // Smaller width for minimalistic design
+            height: 70,  // Smaller height for compact layout
+            x: screenX,
+            y: screenY,
+            frame: false,
+            alwaysOnTop: true,
+            resizable: false,
+            movable: false,
+            transparent: true,
+            hasShadow: false,
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false,
+                webSecurity: true
+            }
+        });
+
+        // Create HTML content for the section modal popup
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {
+                        margin: 0;
+                        padding: 4px;
+                        background: transparent;
+                        font-family: Arial, sans-serif;
+                        overflow: hidden;
+                        height: 100vh;
+                        box-sizing: border-box;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 2px;
+                    }
+                    .modal-container {
+                        background: rgba(255, 255, 255, 0.95);
+                        backdrop-filter: blur(10px);
+                        -webkit-backdrop-filter: blur(10px);
+                        border: 1px solid rgba(0, 0, 0, 0.2);
+                        border-radius: 10px;
+                        padding: 6px;
+                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                        display: flex;
+                        flex-direction: column;
+                        gap: 4px;
+                        width: fit-content;
+                        align-self: center;
+                    }
+                    .modal-input {
+                        width: 100px;
+                        padding: 4px;
+                        border: 1px solid #ccc;
+                        border-radius: 3px;
+                        font-size: 11px;
+                        outline: none;
+                        background: white;
+                    }
+                    .modal-input:focus {
+                        border-color: #007acc;
+                        box-shadow: 0 0 4px rgba(0, 122, 204, 0.3);
+                    }
+                    .button-container {
+                        display: flex;
+                        gap: 2px;
+                        justify-content: center;
+                    }
+                    .modal-button {
+                        padding: 4px 8px;
+                        border: 1px solid #ccc;
+                        border-radius: 3px;
+                        cursor: pointer;
+                        font-size: 8px;
+                        transition: all 0.2s ease;
+                        min-width: 20px;
+                    }
+                    .confirm-btn {
+                        background: #22c55e;
+                        color: white;
+                        border-color: #22c55e;
+                    }
+                    .confirm-btn:hover {
+                        background: #16a34a;
+                    }
+                    .cancel-btn {
+                        background: #f5f5f5;
+                        color: #333;
+                    }
+                    .cancel-btn:hover {
+                        background: #e5e5e5;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="modal-container">
+                    <input type="text" class="modal-input" id="sectionInput" placeholder="Section name" autofocus>
+                    <div class="button-container">
+                        <button class="modal-button confirm-btn" onclick="confirmSection()">✓</button>
+                        <button class="modal-button cancel-btn" onclick="cancelSection()">✕</button>
+                    </div>
+                </div>
+                <script>
+                    const { ipcRenderer } = require('electron');
+                    const tabId = '${tabId || ''}';
+                    
+                    function confirmSection() {
+                        const sectionName = document.getElementById('sectionInput').value.trim();
+                        if (sectionName) {
+                            ipcRenderer.send('section-modal-action', { 
+                                action: 'confirm', 
+                                sectionName, 
+                                tabId: tabId || null 
+                            });
+                        }
+                        window.close();
+                    }
+                    
+                    function cancelSection() {
+                        ipcRenderer.send('section-modal-action', { action: 'cancel' });
+                        window.close();
+                    }
+                    
+                    // Handle Enter and Escape keys
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            confirmSection();
+                        } else if (e.key === 'Escape') {
+                            cancelSection();
+                        }
+                    });
+                    
+                    // Auto-focus and select input
+                    setTimeout(() => {
+                        const input = document.getElementById('sectionInput');
+                        input.focus();
+                        input.select();
+                    }, 100);
+                </script>
+            </body>
+            </html>
+        `;
+
+        sectionModalPopup.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+
+        sectionModalPopup.on('closed', () => {
+            sectionModalPopup = null;
+        });
+
+        // Auto-close when clicking outside
+        sectionModalPopup.on('blur', () => {
+            if (sectionModalPopup) {
+                sectionModalPopup.close();
+            }
+        });
+    });
+
     // Handle dropdown actions from popup window
     ipcMain.on('dropdown-action', (event, data) => {
         // Forward the action to the main renderer window
@@ -345,6 +517,19 @@ function createWindow() {
         // Close the popup
         if (dropdownPopup) {
             dropdownPopup.close();
+        }
+    });
+
+    // Handle section modal actions
+    ipcMain.on('section-modal-action', (event, data) => {
+        // Forward the action to the main renderer window
+        if (mainWindow) {
+            mainWindow.webContents.send('section-modal-result', data);
+        }
+
+        // Close the section modal popup
+        if (sectionModalPopup) {
+            sectionModalPopup.close();
         }
     });
 

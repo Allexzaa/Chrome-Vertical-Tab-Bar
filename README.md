@@ -1,4 +1,4 @@
-# Chrome Vertical Tab Bar
+# Vertical Tab Bar
 
 A modern, responsive vertical tab bar application for Windows, built with Electron and TypeScript. Features an advanced hamburger menu with collapsible color picker, glass morphism effects, and intelligent responsive design that adapts to different window sizes.
 

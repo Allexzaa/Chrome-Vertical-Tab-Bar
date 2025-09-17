@@ -20,6 +20,9 @@ contextBridge.exposeInMainWorld(
         closeWindow: () => ipcRenderer.send('close-window'),
         showDropdownPopup: (x: number, y: number, content: any) => ipcRenderer.send('show-dropdown-popup', x, y, content),
         hideDropdownPopup: () => ipcRenderer.send('hide-dropdown-popup'),
+        showSectionModal: (x: number, y: number, tabId?: string) => ipcRenderer.send('show-section-modal', x, y, tabId),
+        onSectionModalResult: (callback: (data: { action: string, sectionName?: string, tabId?: string }) => void) =>
+            ipcRenderer.on('section-modal-result', (_, data) => callback(data)),
         onDropdownAction: (callback: (data: { action: string, sectionName: string, colorName?: string }) => void) => {
             ipcRenderer.on('execute-dropdown-action', (event, data) => callback(data));
         }
