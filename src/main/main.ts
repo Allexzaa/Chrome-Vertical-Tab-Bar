@@ -114,7 +114,7 @@ function createWindow() {
 
 
         dropdownPopup = new BrowserWindow({
-            width: 170,  // Extra wide to ensure expanded colors fit completely
+            width: 190,  // Extra wide to ensure expanded colors fit completely
             height: 120, // Height for color row + 4 action icons with full visibility
             x: screenX,
             y: screenY,
@@ -179,7 +179,7 @@ function createWindow() {
                         transition: all 0.3s ease;
                         position: absolute;
                         top: 5px;
-                        left: 60px;
+                        left: 85px;
                         z-index: 1000;
                         pointer-events: auto;
                     }

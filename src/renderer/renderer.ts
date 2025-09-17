@@ -995,7 +995,7 @@ function renderNarrowSectionHeader(headerElement: HTMLElement, sectionName: stri
             const hamburgerRect = hamburgerIcon.getBoundingClientRect();
 
             // Position popup window directly below the hamburger icon
-            const popupX = Math.round(hamburgerRect.left - 65); // Move further left to align with visual icon
+            const popupX = Math.round(hamburgerRect.left - 80); // Move further left to align with visual icon
             const popupY = Math.round(hamburgerRect.bottom - 4); // 2px below the icon
 
             // Show popup window outside the main window
