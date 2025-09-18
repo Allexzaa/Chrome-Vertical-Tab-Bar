@@ -48,36 +48,156 @@ interface SectionColors {
     [sectionName: string]: string;
 }
 
-// High-quality favicon function with multiple services and SVG support
+// High-quality favicon function that prioritizes actual website favicons over generic letters
+// Extract the EXACT favicon from the webpage HTML - no generic letters!
 async function getHighQualityFavicon(url: string): Promise<string> {
+    console.log(`🚀 FAVICON FUNCTION STARTED FOR: ${url}`);
     try {
         const domain = new URL(url).hostname;
-        
-        // Option 1: Try icon.horse (high quality service)
-        const iconHorseUrl = `https://icon.horse/icon/${domain}`;
-        
-        // Option 2: Try to get SVG favicon from the actual page
+        const protocol = new URL(url).protocol;
+
+        console.log(`Extracting real favicon for: ${url}`);
+
+        // STEP 1: Fetch the actual webpage HTML to extract favicon links
         try {
-            const response = await fetch(url, { mode: 'no-cors' });
-            // Note: Due to CORS, we can't actually read the response, 
-            // but we can try the common SVG favicon paths
-            const svgFaviconUrl = `https://${domain}/favicon.svg`;
-            
-            // Test if SVG favicon exists
-            const svgTest = await fetch(svgFaviconUrl, { method: 'HEAD', mode: 'no-cors' });
-            return svgFaviconUrl;
-        } catch {
-            // SVG favicon not available, continue with other options
+            // Use a CORS proxy to fetch the webpage content
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+            console.log(`Trying to fetch HTML from: ${proxyUrl}`);
+            const response = await fetch(proxyUrl);
+            const data = await response.json();
+            console.log(`Proxy response status:`, response.status);
+            console.log(`Data received:`, data.status);
+
+            if (data.contents) {
+                // Parse the HTML to find favicon declarations
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(data.contents, 'text/html');
+
+                // Look for favicon links in order of preference
+                const faviconSelectors = [
+                    'link[rel="icon"][type="image/svg+xml"]',  // SVG favicon (best quality)
+                    'link[rel="icon"][type="image/png"]',     // PNG favicon
+                    'link[rel="shortcut icon"]',              // Standard favicon
+                    'link[rel="icon"]',                       // Generic icon
+                    'link[rel="apple-touch-icon"]',           // Apple touch icon (often high quality)
+                    'link[rel="apple-touch-icon-precomposed"]', // Apple precomposed
+                    'meta[property="og:image"]'               // Open Graph image as fallback
+                ];
+
+                for (const selector of faviconSelectors) {
+                    const element = doc.querySelector(selector);
+                    if (element) {
+                        let faviconUrl = element.getAttribute('href') || element.getAttribute('content');
+                        if (faviconUrl) {
+                            // Convert relative URLs to absolute URLs
+                            if (faviconUrl.startsWith('//')) {
+                                faviconUrl = protocol + faviconUrl;
+                            } else if (faviconUrl.startsWith('/')) {
+                                faviconUrl = `${protocol}//${domain}${faviconUrl}`;
+                            } else if (!faviconUrl.startsWith('http')) {
+                                faviconUrl = `${protocol}//${domain}/${faviconUrl}`;
+                            }
+
+                            console.log(`Found favicon in HTML: ${faviconUrl}`);
+
+                            // Validate that this is actually an image
+                            try {
+                                const isValid = await validateImage(faviconUrl);
+                                if (isValid) {
+                                    return faviconUrl;
+                                }
+                            } catch {
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.log(`HTML parsing failed: ${error}`);
         }
-        
-        // Option 3: Use icon.horse as primary (usually high quality)
-        return iconHorseUrl;
-        
+
+        // STEP 2: Try common direct favicon paths on the website
+        const directPaths = [
+            `${protocol}//${domain}/favicon.svg`,    // SVG (best quality)
+            `${protocol}//${domain}/favicon.ico`,    // Standard
+            `${protocol}//${domain}/favicon.png`,    // PNG
+            `${protocol}//${domain}/apple-touch-icon.png`, // Apple (often high-res)
+            `${protocol}//${domain}/apple-touch-icon-180x180.png`,
+            `${protocol}//${domain}/android-chrome-192x192.png`
+        ];
+
+        for (const faviconPath of directPaths) {
+            try {
+                const isValid = await validateImage(faviconPath);
+                if (isValid) {
+                    console.log(`Found direct favicon: ${faviconPath}`);
+                    return faviconPath;
+                }
+            } catch {
+                continue;
+            }
+        }
+
+        // STEP 3: Try a different approach - use Favicon Kit API (gets real favicons)
+        console.log(`Trying Favicon Kit API for ${domain}`);
+        const faviconKitUrl = `https://api.faviconkit.com/${domain}/64`;
+
+        try {
+            const isValid = await validateImage(faviconKitUrl);
+            if (isValid) {
+                console.log(`Favicon Kit worked: ${faviconKitUrl}`);
+                return faviconKitUrl;
+            }
+        } catch {
+            console.log(`Favicon Kit failed`);
+        }
+
+        // STEP 4: Try Clearbit Logo API (often has real company logos)
+        const clearbitUrl = `https://logo.clearbit.com/${domain}`;
+        console.log(`Trying Clearbit for ${domain}`);
+
+        try {
+            const isValid = await validateImage(clearbitUrl);
+            if (isValid) {
+                console.log(`Clearbit worked: ${clearbitUrl}`);
+                return clearbitUrl;
+            }
+        } catch {
+            console.log(`Clearbit failed`);
+        }
+
+        // STEP 5: Last resort - but log it
+        console.log(`No real favicon found for ${domain}, using DuckDuckGo fallback`);
+        return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+
     } catch (error) {
-        // Fallback to Google's service if all else fails
+        console.log(`❌ Favicon extraction error: ${error}`);
         const domain = new URL(url).hostname;
-        return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+        console.log(`🔄 Using fallback for: ${domain}`);
+        return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
     }
+}
+
+// Helper function to validate that a URL actually contains an image
+async function validateImage(url: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        const timeout = setTimeout(() => resolve(false), 5000);
+
+        img.onload = () => {
+            clearTimeout(timeout);
+            // Ensure it's actually an image with dimensions
+            resolve(img.width > 0 && img.height > 0 && img.width < 1000 && img.height < 1000);
+        };
+
+        img.onerror = () => {
+            clearTimeout(timeout);
+            resolve(false);
+        };
+
+        img.src = url;
+    });
 }
 
 let sectionColors: SectionColors = {};

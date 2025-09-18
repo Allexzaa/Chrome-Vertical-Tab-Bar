@@ -40,7 +40,16 @@ function createWindow() {
     // Show the window after it's fully loaded
     mainWindow.once('ready-to-show', () => {
         mainWindow?.show();
+    });
 
+    // Add keyboard shortcut to open developer tools
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+            mainWindow?.webContents.openDevTools();
+        }
+        if (input.key === 'F12') {
+            mainWindow?.webContents.openDevTools();
+        }
     });
 
     // Event handlers for the window
