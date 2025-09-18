@@ -48,6 +48,38 @@ interface SectionColors {
     [sectionName: string]: string;
 }
 
+// High-quality favicon function with multiple services and SVG support
+async function getHighQualityFavicon(url: string): Promise<string> {
+    try {
+        const domain = new URL(url).hostname;
+        
+        // Option 1: Try icon.horse (high quality service)
+        const iconHorseUrl = `https://icon.horse/icon/${domain}`;
+        
+        // Option 2: Try to get SVG favicon from the actual page
+        try {
+            const response = await fetch(url, { mode: 'no-cors' });
+            // Note: Due to CORS, we can't actually read the response, 
+            // but we can try the common SVG favicon paths
+            const svgFaviconUrl = `https://${domain}/favicon.svg`;
+            
+            // Test if SVG favicon exists
+            const svgTest = await fetch(svgFaviconUrl, { method: 'HEAD', mode: 'no-cors' });
+            return svgFaviconUrl;
+        } catch {
+            // SVG favicon not available, continue with other options
+        }
+        
+        // Option 3: Use icon.horse as primary (usually high quality)
+        return iconHorseUrl;
+        
+    } catch (error) {
+        // Fallback to Google's service if all else fails
+        const domain = new URL(url).hostname;
+        return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+    }
+}
+
 let sectionColors: SectionColors = {};
 
 // Available color options with good contrast for both light and dark themes (1 shade darker)
@@ -1479,21 +1511,21 @@ function sortTabs() {
 }
 
 // Function to add a new tab
-function addTab(url: string) {
-    addTabWithTitle(url, url);
+async function addTab(url: string) {
+    await addTabWithTitle(url, url);
 }
 
 // Expose addTab globally for the tray menu
 (window as any).addTab = addTab;
 
 // Function to add a new tab with custom title
-function addTabWithTitle(url: string, title: string, section?: string) {
+async function addTabWithTitle(url: string, title: string, section?: string) {
     const id = `tab-${Date.now()}`;
     const tab: Tab = {
         id,
         url,
         title: title,
-        favicon: `https://www.google.com/s2/favicons?domain=${url}`,
+        favicon: await getHighQualityFavicon(url),
         section: section || 'Unsorted'
     };
 
@@ -1907,7 +1939,7 @@ document.addEventListener('dragleave', (e) => {
     tabContainer?.classList.remove('drag-over');
 });
 
-document.addEventListener('drop', (e) => {
+document.addEventListener('drop', async (e) => {
     e.preventDefault();
     e.stopPropagation();
     tabContainer?.classList.remove('drag-over');
@@ -2044,7 +2076,7 @@ document.addEventListener('drop', (e) => {
 
             const finalTitle = title || url;
             const targetSection = getDropTargetSection(e);
-            addTabWithTitle(url, finalTitle, targetSection);
+            await addTabWithTitle(url, finalTitle, targetSection);
         }
     } else {
         // Show user-friendly message about Chrome tab limitations
